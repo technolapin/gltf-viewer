@@ -27,6 +27,8 @@ private:
 
   bool loadGltfFile(tinygltf::Model &model);
 
+  std::vector<GLuint> createBufferObjects(const tinygltf::Model &model);
+
   GLsizei m_nWindowWidth = 1280;
   GLsizei m_nWindowHeight = 720;
 
