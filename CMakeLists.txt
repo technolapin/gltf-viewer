@@ -172,8 +172,8 @@ install(
     DESTINATION .
 )
 
-c2ba_add_shader_directory(${SRC_DIR}/shaders ${SHADER_OUTPUT_PATH}/${APP})
-c2ba_add_assets_directory(${SRC_DIR}/assets ${ASSET_OUTPUT_PATH}/${APP})
+c2ba_add_shader_directory(${SRC_DIR}/shaders ${SHADER_OUTPUT_PATH})
+c2ba_add_assets_directory(${SRC_DIR}/assets ${ASSET_OUTPUT_PATH})
 
 install(
     DIRECTORY ${SRC_DIR}/shaders/
