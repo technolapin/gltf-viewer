@@ -32,6 +32,11 @@ option(GLFW_BUILD_TESTS OFF)
 option(GLFW_BUILD_EXAMPLES OFF)
 add_subdirectory(third-party/${GLFW_DIR})
 
+if(${CMAKE_VERSION} VERSION_LESS "3.10.0")
+    set(OpenGL_GL_PREFERENCE LEGACY)
+else()
+    set(OpenGL_GL_PREFERENCE GLVND)
+endif()
 find_package(OpenGL REQUIRED)
 
 if(GLTF_VIEWER_USE_BOOST_FILESYSTEM)
@@ -78,15 +83,28 @@ set(
     glfw
 )
 
-if(CMAKE_COMPILER_IS_GNUCXX AND NOT GLTF_VIEWER_USE_BOOST_FILESYSTEM)
-    set(LIBRARIES ${LIBRARIES} stdc++fs)
-endif()
-
+set(CXXFLAGS ${CXXFLAGS} std=c++14)
 if (GLTF_VIEWER_USE_BOOST_FILESYSTEM)
     set(LIBRARIES ${LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY})
+else()
+    if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        set(CXXFLAGS ${CXXFLAGS} std=c++17)
+        set(LIBRARIES ${LIBRARIES} stdc++fs)
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "8.0.0")
+            set(USE_STD_FILESYSTEM 1)
+        endif()
+
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "[Cc]lang")
+        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0.0")
+            set(LIBRARIES ${LIBRARIES} stdc++fs)
+        else()
+            set(CXXFLAGS ${CXXFLAGS} std=c++17)
+            set(USE_STD_FILESYSTEM 1)
+        endif()
+    endif()
 endif()
 
-source_group("glsl" REGULAR_EXPRESSION "*/*.glsl")
+source_group("glsl" REGULAR_EXPRESSION ".*/*.glsl")
 source_group("third-party" REGULAR_EXPRESSION "third-party/*.*")
 
 set(APP gltf-viewer)
@@ -138,7 +156,11 @@ target_compile_definitions(
     GLM_ENABLE_EXPERIMENTAL
 )
 
-set_property(TARGET ${APP} PROPERTY CXX_STANDARD 17)
+if(${CMAKE_VERSION} VERSION_LESS "3.8.0")
+    set_property(TARGET ${APP} PROPERTY CXX_STANDARD 14)
+else()
+    set_property(TARGET ${APP} PROPERTY CXX_STANDARD 17)
+endif()
 
 target_link_libraries(
     ${APP}
