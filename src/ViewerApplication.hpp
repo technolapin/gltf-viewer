@@ -5,6 +5,8 @@
 #include "utils/filesystem.hpp"
 #include "utils/shaders.hpp"
 
+#include <tiny_gltf.h>
+
 class ViewerApplication
 {
 public:
@@ -45,6 +47,8 @@ private:
   GLFWHandle m_GLFWHandle{int(m_nWindowWidth), int(m_nWindowHeight),
       "glTF Viewer",
       m_OutputPath.empty()}; // show the window only if m_OutputPath is empty
+
+
   /*
     ! THE ORDER OF DECLARATION OF MEMBER VARIABLES IS IMPORTANT !
     - m_ImGuiIniFilename.c_str() will be used by ImGUI in ImGui::Shutdown, which
@@ -56,4 +60,10 @@ private:
     the creation of a GLFW windows and thus a GL context which must exists
     before most of OpenGL function calls.
   */
+
+
+    bool loadGltfFile(tinygltf::Model & model);
+    
+
+    
 };
