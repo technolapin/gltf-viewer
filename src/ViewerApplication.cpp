@@ -13,6 +13,16 @@
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
 
+
+const GLuint VERTEX_ATTRIB_POSITION_IDX = 0;
+const GLuint VERTEX_ATTRIB_NORMAL_IDX = 1;
+const GLuint VERTEX_ATTRIB_TEXCOORD0_IDX = 2;
+
+
+
+
+
+
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -60,6 +70,7 @@ int ViewerApplication::run()
   loadGltfFile(model);
   
   // TODO Creation of Buffer Objects
+  auto vbos = createBufferObjects(model);
 
   // TODO Creation of Vertex Array Objects
 
@@ -212,3 +223,77 @@ ViewerApplication::loadGltfFile(tinygltf::Model & model)
     return ret;
     
 }
+
+
+std::vector<GLuint>
+ViewerApplication::createBufferObjects(const tinygltf::Model &model)
+{
+    std::vector<GLuint> bufferObjects(model.buffers.size(), 0); // Assuming buffers is a std::vector of Buffer
+    glGenBuffers(model.buffers.size(), bufferObjects.data());
+    
+    for (size_t i = 0; i < model.buffers.size(); ++i)
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, bufferObjects[i]);
+        glBufferStorage(GL_ARRAY_BUFFER,
+                        model.buffers[i].data.size(), // Assume a Buffer has a data member variable of type std::vector
+                        model.buffers[i].data.data(), 0);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, 0); // Cleanup the binding point after the loop only
+
+    return bufferObjects;
+}
+
+
+
+GLuint
+create_vao(GLuint positionBufferObject,
+           GLuint normalBufferObject,
+           GLuint texCoordBufferObject,
+           GLuint positionByteStride,
+           GLuint normalByteStride,
+           GLuint texCoordsByteStride,
+           GLuint * positionByteOffset,
+           GLuint * normalByteOffset,
+           GLuint * texCoordsByteOffset,
+           GLuint indexBufferObject = 0)
+{
+    
+    GLuint vertexArrayObject = 0;
+    glGenVertexArrays(1, &vertexArrayObject);
+    glBindVertexArray(vertexArrayObject);
+    // Tell OpenGL we use this index:
+    glEnableVertexAttribArray(VERTEX_ATTRIB_POSITION_IDX);
+    // Assume positionBufferObject is previously created buffer object
+    // storing our positions
+    glBindBuffer(GL_ARRAY_BUFFER, positionBufferObject);
+    // Tell OpenGL to use the buffer object currently bound to GL_ARRAY_BUFFER
+    // and how to read data from it: 3 float per position, starting at positionByteOffset, and each next position
+    // being positionByteStride bytes later from the current one
+    glVertexAttribPointer(VERTEX_ATTRIB_POSITION_IDX, GL_FLOAT, 3, GL_FALSE,
+                          positionByteStride, (const GLvoid*)positionByteOffset);
+
+    glBindBuffer(GL_ARRAY_BUFFER, normalBufferObject);
+    glEnableVertexAttribArray(VERTEX_ATTRIB_NORMAL_IDX);
+    glVertexAttribPointer(VERTEX_ATTRIB_NORMAL_IDX, GL_FLOAT, 3, GL_FALSE,
+                          normalByteStride, (const GLvoid*)normalByteOffset);
+
+    glBindBuffer(GL_ARRAY_BUFFER, texCoordBufferObject);
+    glEnableVertexAttribArray(VERTEX_ATTRIB_TEXCOORD0_IDX);
+    // Note the 2 here, tex coords are generally 2 floats only:
+    glVertexAttribPointer(VERTEX_ATTRIB_TEXCOORD0_IDX, GL_FLOAT, 2, GL_FALSE,
+                          texCoordsByteStride, (const GLvoid*)texCoordsByteOffset);
+
+    if (indexBufferObject)
+    {
+        // Tell OpenGL we use an index buffer for this primitive:
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);
+    }
+
+    // End the description of our vertex array object:
+    glBindVertexArray(0);
+
+
+    return vertexArrayObject;
+    
+}
+
