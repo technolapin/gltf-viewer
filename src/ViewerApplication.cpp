@@ -126,7 +126,7 @@ int ViewerApplication::run()
                     glBindVertexArray(vao);
 
                     if (prim.indices >= 0)
-                    {
+                    { // indices case
                         const auto & accessor = model.accessors[prim.indices];
                         const auto & bufferView = model.bufferViews[accessor.bufferView];
                         const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
@@ -137,11 +137,20 @@ int ViewerApplication::run()
                                        (GLvoid*) byteOffset);
 
                     }
-                    
-                    
+                    else
+                    { // no indices case
+                        const auto accessorIdx = (*begin(prim.attributes)).second;
+                        const auto & accessor = model.accessors[accessorIdx];
+                        glDrawArrays(prim.mode, 0, accessor.count);
+                    }
                     glBindVertexArray(0);
                     primIdx++;
                 }
+                for (const auto & child: node.children)
+                {
+                    drawNode(child, modelMatrix);
+                }
+
             
             }
 
