@@ -63,6 +63,7 @@ int ViewerApplication::run()
     cameraController.setCamera(
         Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
   }
+  
 
   tinygltf::Model model;
   // DONE Loading the glTF file
@@ -70,10 +71,16 @@ int ViewerApplication::run()
   loadGltfFile(model);
   
   // TODO Creation of Buffer Objects
-  auto vbos = createBufferObjects(model);
+  const auto vbos = createBufferObjects(model);
 
   // TODO Creation of Vertex Array Objects
+  std::vector<VaoRange> meshIndexToVaoRange;
+  const auto vbas = createVertexArrayObjects(model,
+                                             vbos,
+                                             meshIndexToVaoRange);
 
+
+  
   // Setup OpenGL state for rendering
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
@@ -93,8 +100,15 @@ int ViewerApplication::run()
         };
 
     // Draw the scene referenced by gltf file
-    if (model.defaultScene >= 0) {
-      // TODO Draw all nodes
+    if (model.defaultScene >= 0)
+    {
+        // DOING Draw all nodes
+        for (const auto & node: model.scenes[model.defaultScene].nodes)
+        {
+            // node is an int
+            drawNode(node, glm::mat4(1));
+        }
+        
     }
   };
 
@@ -297,3 +311,86 @@ create_vao(GLuint positionBufferObject,
     
 }
 
+
+#include <typeinfo>  
+
+std::vector<GLuint>
+ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
+                                            const std::vector<GLuint> &bufferObjects,
+                                            std::vector<VaoRange> & meshIndexToVaoRange)
+{
+    std::vector<GLuint> vertexArrayObjects;
+
+    for (auto const & mesh: model.meshes)
+    {
+        const auto vaoOffset = (GLsizei) vertexArrayObjects.size();
+        const auto n_primitives = (GLsizei) mesh.primitives.size();
+        vertexArrayObjects.resize(vaoOffset + n_primitives);
+        meshIndexToVaoRange.push_back(VaoRange{vaoOffset, n_primitives}); // Will be used during rendering
+
+        // vectors are contiguous
+        glGenVertexArrays(n_primitives, vertexArrayObjects.data() + vaoOffset);
+
+        auto prim_off = vaoOffset;
+        for (auto const & primitive: mesh.primitives)
+        {
+            auto vao = vertexArrayObjects[prim_off];
+
+            glBindVertexArray(vao);
+
+            std::vector<std::pair<std::string, GLuint>> attributes =
+                {
+                    {"POSITION", VERTEX_ATTRIB_POSITION_IDX},
+                    {"NORMAL", VERTEX_ATTRIB_NORMAL_IDX},
+                    {"TEXCOORD_0", VERTEX_ATTRIB_TEXCOORD0_IDX},
+                };
+
+            for (auto & name_and_attrib: attributes)
+            {
+                const auto iterator = primitive.attributes.find(name_and_attrib.first);
+                const auto attrib = name_and_attrib.second;
+                
+                if (iterator != end(primitive.attributes))
+                { // If "POSITION" has been found in the map
+                    const auto accessorIdx = (*iterator).second;
+                    const auto &accessor = model.accessors[accessorIdx];
+                    const auto &bufferView = model.bufferViews[accessor.bufferView];
+                    const auto bufferIdx = bufferView.buffer;
+                    
+                    const auto bufferObject = bufferObjects[bufferIdx]; 
+                    
+                    
+                    glEnableVertexAttribArray(attrib);
+                    
+                    glBindBuffer(GL_ARRAY_BUFFER, bufferObject);
+                    const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
+                    glVertexAttribPointer(attrib,
+                                          accessor.type,
+                                          accessor.componentType,
+                                          GL_FALSE,
+                                          bufferView.byteStride,
+                                          (const GLvoid*) byteOffset);
+
+                }
+                                                                                                                                                                                                    
+            }
+
+
+            if (primitive.indices >= 0)
+            {
+                const auto bufferObject = bufferObjects[primitive.indices]; 
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bufferObject);
+            }
+
+            glBindBuffer(GL_ARRAY_BUFFER, 0); // Cleanup the binding point after the loop only
+        
+            glBindVertexArray(0);
+            
+            prim_off++;
+        }
+    }
+    return vertexArrayObjects;
+}
+
+// TODO: WHERE IS VaoRange ?!
