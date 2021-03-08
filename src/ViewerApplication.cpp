@@ -13,7 +13,7 @@
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
 
-
+#include "utils/gltf.hpp"
 const GLuint VERTEX_ATTRIB_POSITION_IDX = 0;
 const GLuint VERTEX_ATTRIB_NORMAL_IDX = 1;
 const GLuint VERTEX_ATTRIB_TEXCOORD0_IDX = 2;
@@ -95,14 +95,62 @@ int ViewerApplication::run()
     // The recursive function that should draw a node
     // We use a std::function because a simple lambda cannot be recursive
     const std::function<void(int, const glm::mat4 &)> drawNode =
-        [&](int nodeIdx, const glm::mat4 &parentMatrix) {
-          // TODO The drawNode function
+        [&](int nodeIdx, const glm::mat4 &parentMatrix)
+        {
+            // DOING The drawNode function
+            const auto & node = model.nodes[nodeIdx];
+            const auto modelMatrix = getLocalToWorldMatrix(node, parentMatrix); 
+           if (node.mesh >= 0)
+            {
+                const auto modelViewMatrix = viewMatrix * modelMatrix;
+                const auto modelViewProjMatrix = projMatrix * modelViewMatrix;
+                const auto normalMatrix = glm::transpose(glm::inverse(modelViewMatrix));
+
+                glUniformMatrix4fv(modelViewMatrixLocation,
+                                   1, GL_FALSE,
+                                   glm::value_ptr(modelViewMatrix));
+                glUniformMatrix4fv(modelViewProjMatrixLocation,
+                                   1, GL_FALSE,
+                                   glm::value_ptr(modelViewProjMatrix));
+                glUniformMatrix4fv(modelViewProjMatrixLocation,
+                                   1, GL_FALSE,
+                                   glm::value_ptr(modelViewProjMatrix));
+
+                const auto & mesh = model.meshes[node.mesh];
+                const auto & vaoRange = meshIndexToVaoRange[node.mesh];
+                auto primIdx = 0;
+                for (const auto & prim: mesh.primitives)
+                {
+                    const auto & vao = vbas[vaoRange.begin + primIdx];
+
+                    glBindVertexArray(vao);
+
+                    if (prim.indices >= 0)
+                    {
+                        const auto & accessor = model.accessors[prim.indices];
+                        const auto & bufferView = model.bufferViews[accessor.bufferView];
+                        const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
+
+                        glDrawElements(prim.mode,
+                                       accessor.count,
+                                       accessor.componentType,
+                                       (GLvoid*) byteOffset);
+
+                    }
+                    
+                    
+                    glBindVertexArray(0);
+                    primIdx++;
+                }
+            
+            }
+
         };
 
     // Draw the scene referenced by gltf file
     if (model.defaultScene >= 0)
     {
-        // DOING Draw all nodes
+        // DONE Draw all nodes
         for (const auto & node: model.scenes[model.defaultScene].nodes)
         {
             // node is an int
@@ -378,19 +426,18 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
 
             if (primitive.indices >= 0)
             {
-                const auto bufferObject = bufferObjects[primitive.indices]; 
-
+                const auto & accessor = model.accessors[primitive.indices];
+                const auto & bufferView = model.bufferViews[accessor.bufferView];
+                const auto bufferObject = bufferObjects[bufferView.buffer];
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bufferObject);
             }
 
             glBindBuffer(GL_ARRAY_BUFFER, 0); // Cleanup the binding point after the loop only
         
             glBindVertexArray(0);
-            
+
             prim_off++;
         }
     }
     return vertexArrayObjects;
 }
-
-// TODO: WHERE IS VaoRange ?!
