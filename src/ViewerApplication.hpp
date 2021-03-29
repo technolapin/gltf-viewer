@@ -4,6 +4,7 @@
 #include "utils/cameras.hpp"
 #include "utils/filesystem.hpp"
 #include "utils/shaders.hpp"
+#include "utils/images.hpp"
 
 #include <tiny_gltf.h>
 

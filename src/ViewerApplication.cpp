@@ -178,6 +178,22 @@ int ViewerApplication::run()
         
     }
   };
+
+  if (!m_OutputPath.empty())
+  {
+      const auto w = m_nWindowWidth;
+      const auto h = m_nWindowHeight;
+      const auto channels = 3;
+      const auto n = w*h*channels;
+      std::vector<unsigned char> test_image(n);
+      renderToImage(w, h, channels, test_image.data(),
+                    [&]() {drawScene(cameraController.getCamera());});
+      flipImageYAxis(w, h, channels, test_image.data());
+      const auto strPath = m_OutputPath.string();
+      stbi_write_png(
+          strPath.c_str(), m_nWindowWidth, m_nWindowHeight, 3, test_image.data(), 0);
+      return 0;
+  }
   
   
 
