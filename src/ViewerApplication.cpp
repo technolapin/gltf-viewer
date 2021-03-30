@@ -72,13 +72,19 @@ int ViewerApplication::run()
   // TODO Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
 //  FirstPersonCameraController cameraController{m_GLFWHandle.window(), camera_speed_percentage * maxDistance};
-  std::unique_ptr<CameraController> cameraController =
-      std::make_unique<TrackballCameraController>(m_GLFWHandle.window(),
-                                                  camera_speed_percentage * maxDistance);
+  std::vector<std::unique_ptr<CameraController>> cameras;
+
+  cameras.push_back(std::make_unique<TrackballCameraController>(m_GLFWHandle.window(),
+                                                                camera_speed_percentage * maxDistance));
+  cameras.push_back(std::make_unique<FirstPersonCameraController>(m_GLFWHandle.window(),
+                                                                camera_speed_percentage * maxDistance));
+
+  auto camera_index = 0;
+  
   
   if (m_hasUserCamera)
   {
-      cameraController->setCamera(m_userCamera);
+      cameras[camera_index]->setCamera(m_userCamera);
   }
   else
   {
@@ -86,7 +92,7 @@ int ViewerApplication::run()
       
       const auto eye = (bboxMax[2] - bboxMin[2] >= 0.0001)? bboxCenter + bboxDiag: bboxCenter + 2.f * glm::cross(bboxDiag, up);
 
-      cameraController->setCamera(Camera{bboxCenter, eye, up});
+      cameras[camera_index]->setCamera(Camera{bboxCenter, eye, up});
   }
   
 
@@ -207,7 +213,7 @@ int ViewerApplication::run()
       const auto n = w*h*channels;
       std::vector<unsigned char> test_image(n);
       renderToImage(w, h, channels, test_image.data(),
-                    [&]() {drawScene(cameraController->getCamera());});
+                    [&]() {drawScene(cameras[camera_index]->getCamera());});
       flipImageYAxis(w, h, channels, test_image.data());
       const auto strPath = m_OutputPath.string();
       stbi_write_png(
@@ -223,7 +229,7 @@ int ViewerApplication::run()
        ++iterationCount) {
     const auto seconds = glfwGetTime();
 
-    const auto camera = cameraController->getCamera();
+    const auto camera = cameras[camera_index]->getCamera();
     drawScene(camera);
 
     // GUI code:
@@ -234,6 +240,9 @@ int ViewerApplication::run()
       ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
           1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
       if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+          ImGui::RadioButton("Trackball", &camera_index, 0); ImGui::SameLine();
+          ImGui::RadioButton("FPS", &camera_index, 1);
+
         ImGui::Text("eye: %.3f %.3f %.3f", camera.eye().x, camera.eye().y,
             camera.eye().z);
         ImGui::Text("center: %.3f %.3f %.3f", camera.center().x,
@@ -267,7 +276,7 @@ int ViewerApplication::run()
     auto guiHasFocus =
         ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
     if (!guiHasFocus) {
-      cameraController->update(float(ellapsedTime));
+      cameras[camera_index]->update(float(ellapsedTime));
     }
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
