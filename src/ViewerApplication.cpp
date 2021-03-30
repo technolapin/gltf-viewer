@@ -35,7 +35,13 @@ void keyCallback(
 
 int ViewerApplication::run()
 {
-  // Loader shaders
+  tinygltf::Model model;
+  // DONE Loading the glTF file
+
+  loadGltfFile(model);
+
+
+// Loader shaders
   const auto glslProgram =
       compileProgram({m_ShadersRootPath / m_vertexShader,
           m_ShadersRootPath / m_fragmentShader});
@@ -47,30 +53,44 @@ int ViewerApplication::run()
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
+
+
+  // bounding box
+  glm::vec3 bboxMin, bboxMax, bboxCenter, bboxDiag;
+  computeSceneBounds(model, bboxMin, bboxMax);
+  bboxCenter = (bboxMin + bboxMax)*0.5f;
+  bboxDiag = glm::normalize(bboxMin - bboxMax);
+
   // Build projection matrix
-  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
-  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
+  const auto maxDistance = std::max(100.f, glm::length(bboxDiag));
   const auto projMatrix =
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
           0.001f * maxDistance, 1.5f * maxDistance);
 
+  const auto camera_speed_percentage = 0.04f;
+  
   // TODO Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
-  FirstPersonCameraController cameraController{
-      m_GLFWHandle.window(), 0.5f * maxDistance};
-  if (m_hasUserCamera) {
-    cameraController.setCamera(m_userCamera);
-  } else {
-    // TODO Use scene bounds to compute a better default camera
-    cameraController.setCamera(
-        Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
+//  FirstPersonCameraController cameraController{m_GLFWHandle.window(), camera_speed_percentage * maxDistance};
+  TrackballCameraController
+      cameraController(m_GLFWHandle.window(),
+                       camera_speed_percentage * maxDistance);
+  
+  if (m_hasUserCamera)
+  {
+      cameraController.setCamera(m_userCamera);
+  }
+  else
+  {
+      const auto up = glm::vec3(0, 1, 0);
+      
+      const auto eye = (bboxMax[2] - bboxMin[2] >= 0.0001)? bboxCenter + bboxDiag: bboxCenter + 2.f * glm::cross(bboxDiag, up);
+
+      cameraController.setCamera(Camera{bboxCenter, eye, up});
   }
   
 
-  tinygltf::Model model;
-  // DONE Loading the glTF file
 
-  loadGltfFile(model);
   
   // TODO Creation of Buffer Objects
   const auto vbos = createBufferObjects(model);
@@ -257,187 +277,6 @@ int ViewerApplication::run()
 
   return 0;
 }
-
-
-/*
-int ViewerApplication::run()
-{
-  // Loader shaders
-  const auto glslProgram =
-      compileProgram({m_ShadersRootPath / m_vertexShader,
-          m_ShadersRootPath / m_fragmentShader});
-
-  const auto modelViewProjMatrixLocation =
-      glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
-  const auto modelViewMatrixLocation =
-      glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
-  const auto normalMatrixLocation =
-      glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
-
-  // Build projection matrix
-  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
-  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
-  const auto projMatrix =
-      glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
-          0.001f * maxDistance, 1.5f * maxDistance);
-
-  // TODO Implement a new CameraController model and use it instead. Propose the
-  // choice from the GUI
-  FirstPersonCameraController cameraController{
-      m_GLFWHandle.window(), 0.5f * maxDistance};
-  if (m_hasUserCamera) {
-    cameraController.setCamera(m_userCamera);
-  } else {
-    // TODO Use scene bounds to compute a better default camera
-    cameraController.setCamera(
-        Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
-  }
-
-  tinygltf::Model model;
-  if (!loadGltfFile(model)) {
-    return -1;
-  }
-
-  const auto bufferObjects = createBufferObjects(model);
-
-  std::vector<VaoRange> meshToVertexArrays;
-  const auto vertexArrayObjects =
-      createVertexArrayObjects(model, bufferObjects, meshToVertexArrays);
-
-  // Setup OpenGL state for rendering
-  glEnable(GL_DEPTH_TEST);
-  glslProgram.use();
-
-  // Lambda function to draw the scene
-  const auto drawScene = [&](const Camera &camera) {
-    glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    const auto viewMatrix = camera.getViewMatrix();
-
-    // The recursive function that should draw a node
-    // We use a std::function because a simple lambda cannot be recursive
-    const std::function<void(int, const glm::mat4 &)> drawNode =
-        [&](int nodeIdx, const glm::mat4 &parentMatrix) {
-          const auto &node = model.nodes[nodeIdx];
-          const glm::mat4 modelMatrix =
-              getLocalToWorldMatrix(node, parentMatrix);
-
-          // If the node references a mesh (a node can also reference a
-          // camera, or a light)
-          if (node.mesh >= 0) {
-            const auto mvMatrix =
-                viewMatrix * modelMatrix; // Also called localToCamera matrix
-            const auto mvpMatrix =
-                projMatrix * mvMatrix; // Also called localToScreen matrix
-            // Normal matrix is necessary to maintain normal vectors
-            // orthogonal to tangent vectors
-            // https://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
-            const auto normalMatrix = glm::transpose(glm::inverse(mvMatrix));
-
-            glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE,
-                glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(
-                modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(mvMatrix));
-            glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE,
-                glm::value_ptr(normalMatrix));
-
-            const auto &mesh = model.meshes[node.mesh];
-            const auto &vaoRange = meshToVertexArrays[node.mesh];
-            for (size_t pIdx = 0; pIdx < mesh.primitives.size(); ++pIdx) {
-              const auto vao = vertexArrayObjects[vaoRange.begin + pIdx];
-              const auto &primitive = mesh.primitives[pIdx];
-              glBindVertexArray(vao);
-              if (primitive.indices >= 0) {
-                const auto &accessor = model.accessors[primitive.indices];
-                const auto &bufferView = model.bufferViews[accessor.bufferView];
-                const auto byteOffset =
-                    accessor.byteOffset + bufferView.byteOffset;
-                glDrawElements(primitive.mode, GLsizei(accessor.count),
-                    accessor.componentType, (const GLvoid *)byteOffset);
-              } else {
-                // Take first accessor to get the count
-                const auto accessorIdx = (*begin(primitive.attributes)).second;
-                const auto &accessor = model.accessors[accessorIdx];
-                glDrawArrays(primitive.mode, 0, GLsizei(accessor.count));
-              }
-            }
-          }
-
-          // Draw children
-          for (const auto childNodeIdx : node.children) {
-            drawNode(childNodeIdx, modelMatrix);
-          }
-        };
-
-    // Draw the scene referenced by gltf file
-    if (model.defaultScene >= 0) {
-      for (const auto nodeIdx : model.scenes[model.defaultScene].nodes) {
-        drawNode(nodeIdx, glm::mat4(1));
-      }
-    }
-  };
-
-  // Loop until the user closes the window
-  for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
-       ++iterationCount) {
-    const auto seconds = glfwGetTime();
-
-    const auto camera = cameraController.getCamera();
-    drawScene(camera);
-
-    // GUI code:
-    imguiNewFrame();
-
-    {
-      ImGui::Begin("GUI");
-      ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-          1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-      if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("eye: %.3f %.3f %.3f", camera.eye().x, camera.eye().y,
-            camera.eye().z);
-        ImGui::Text("center: %.3f %.3f %.3f", camera.center().x,
-            camera.center().y, camera.center().z);
-        ImGui::Text(
-            "up: %.3f %.3f %.3f", camera.up().x, camera.up().y, camera.up().z);
-
-        ImGui::Text("front: %.3f %.3f %.3f", camera.front().x, camera.front().y,
-            camera.front().z);
-        ImGui::Text("left: %.3f %.3f %.3f", camera.left().x, camera.left().y,
-            camera.left().z);
-
-        if (ImGui::Button("CLI camera args to clipboard")) {
-          std::stringstream ss;
-          ss << "--lookat " << camera.eye().x << "," << camera.eye().y << ","
-             << camera.eye().z << "," << camera.center().x << ","
-             << camera.center().y << "," << camera.center().z << ","
-             << camera.up().x << "," << camera.up().y << "," << camera.up().z;
-          const auto str = ss.str();
-          glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
-        }
-      }
-      ImGui::End();
-    }
-
-    imguiRenderFrame();
-
-    glfwPollEvents(); // Poll for and process events
-
-    auto ellapsedTime = glfwGetTime() - seconds;
-    auto guiHasFocus =
-        ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
-    if (!guiHasFocus) {
-      cameraController.update(float(ellapsedTime));
-    }
-
-    m_GLFWHandle.swapBuffers(); // Swap front and back buffers
-  }
-
-  // TODO clean up allocated GL data
-
-  return 0;
-}
-*/
 
 
 

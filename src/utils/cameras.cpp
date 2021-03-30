@@ -107,4 +107,104 @@ bool FirstPersonCameraController::update(float elapsedTime)
   return true;
 }
 
-bool TrackballCameraController::update(float elapsedTime) { return false; }
+
+
+
+bool TrackballCameraController::update(float elapsedTime)
+{
+
+    {
+        const auto is_pressed = glfwGetMouseButton(m_pWindow, GLFW_MOUSE_BUTTON_MIDDLE);
+        
+        if (is_pressed && !m_MiddleButtonPressed)
+        {
+            m_MiddleButtonPressed = true;
+
+            // to avoid aberrations
+            dvec2 cursorPosition;
+            glfwGetCursorPos(m_pWindow, &cursorPosition.x, &cursorPosition.y);
+            m_LastCursorPosition = cursorPosition;
+        }
+        else if (!is_pressed && m_MiddleButtonPressed)
+        {
+            m_MiddleButtonPressed = false;
+        }
+    }
+    
+    const auto shift_pressed = glfwGetKey(m_pWindow, GLFW_KEY_LEFT_SHIFT);
+    const auto ctrl_pressed = glfwGetKey(m_pWindow, GLFW_KEY_LEFT_CONTROL);
+   
+    const auto amplitude = elapsedTime * m_fSpeed;
+    
+
+    const auto cursorDelta = ([&]() {
+        if (m_MiddleButtonPressed) {
+            dvec2 cursorPosition;
+            glfwGetCursorPos(m_pWindow, &cursorPosition.x, &cursorPosition.y);
+            const auto delta = cursorPosition - m_LastCursorPosition;
+            m_LastCursorPosition = cursorPosition;
+            return delta;
+        }
+        return dvec2(0);
+    })();
+
+    
+    
+    if (shift_pressed)
+    { // panning case
+        const auto truckLeft = amplitude * float(cursorDelta.x);
+        const auto pedestalUp = amplitude * float(cursorDelta.y);
+        if (truckLeft || pedestalUp)
+        {
+            m_camera.moveLocal(truckLeft, pedestalUp, 0.f);
+            return true;
+        }
+    }
+    else if (ctrl_pressed)
+    { // zoom case
+        const auto delta = amplitude * float(cursorDelta.x);
+        if (delta)
+        {
+            const auto eyeDir = glm::normalize(m_camera.center() - m_camera.eye());
+            m_camera = Camera(m_camera.eye() + eyeDir*delta,
+                              m_camera.center(),
+                              m_worldUpAxis);
+            return true;
+
+        }
+    }
+    else
+    { // rotating case
+        const auto depthAxis = m_camera.eye() - m_camera.center();
+
+        const auto latitudeAngle = -amplitude * float(cursorDelta.x);
+        const auto longitudeAngle = amplitude * float(cursorDelta.y);
+
+        if (latitudeAngle || longitudeAngle)
+        {
+
+            const auto horizontalAxis = m_camera.left();
+        
+
+            const auto longitudeRotationMatrix =
+                rotate(mat4(1), longitudeAngle, horizontalAxis);
+        
+            const auto rotationMatrix =
+                rotate(longitudeRotationMatrix, latitudeAngle, m_worldUpAxis);
+
+//            const auto rotationMatrix = latitudeRotationMatrix * longitudeRotationMatrix;
+        
+            const auto finalDepthAxis = vec3(rotationMatrix * vec4(depthAxis, 0));
+
+        
+            m_camera = Camera(m_camera.center() + finalDepthAxis,
+                              m_camera.center(), m_worldUpAxis);
+            return true;
+        }
+        
+    }
+
+    return false;
+}
+
+
