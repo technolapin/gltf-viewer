@@ -53,6 +53,11 @@ int ViewerApplication::run()
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
+  const auto lightDirLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightDir");
+  const auto lightColLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightCol");
+
 
 
   // bounding box
@@ -113,15 +118,46 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
+  glm::vec3 light_col(1, 0.7, 0.2);
+
+  bool light_is_camera = false;
   
+  float light_theta = 0;
+  float light_phi = 0;
+  float light_intensity = 1.f;
   
   // Lambda function to draw the scene
-  const auto drawScene = [&](const Camera &camera) {
-    glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+  const auto drawScene = [&](const Camera &camera)
+  {
+      glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      
     const auto viewMatrix = camera.getViewMatrix();
 
+    const auto sin_phi = std::sin(light_phi);
+    const auto cos_phi = std::cos(light_phi);
+    const auto sin_the = std::sin(light_theta);
+    const auto cos_the = std::cos(light_theta);
+    
+    const auto light_dir = glm::vec3(sin_the*cos_phi, cos_the, sin_the*sin_phi);
+
+    glm::vec3 light_viewspace_dir;
+
+    if (light_is_camera)
+    {
+        light_viewspace_dir = glm::vec3(0, 0, 1);
+    }
+    else
+    {
+        light_viewspace_dir = glm::normalize(glm::vec3(viewMatrix * glm::vec4(light_dir, 0)));
+    }
+
+    const auto light_intensity_color = light_intensity * light_col;
+    
+    glUniform3fv(lightDirLocation, 1, glm::value_ptr(light_viewspace_dir));
+    glUniform3fv(lightColLocation, 1, glm::value_ptr(light_intensity_color));
+
+    
     // The recursive function that should draw a node
     // We use a std::function because a simple lambda cannot be recursive
     const std::function<void(int, const glm::mat4 &)> drawNode =
@@ -220,8 +256,6 @@ int ViewerApplication::run()
           strPath.c_str(), m_nWindowWidth, m_nWindowHeight, 3, test_image.data(), 0);
       return 0;
   }
-  
-  
 
 
   // Loop until the user closes the window
@@ -262,7 +296,8 @@ int ViewerApplication::run()
               ImGui::Text("left: %.3f %.3f %.3f", camera.left().x, camera.left().y,
                           camera.left().z);
 
-              if (ImGui::Button("CLI camera args to clipboard")) {
+              if (ImGui::Button("CLI camera args to clipboard"))
+              {
                   std::stringstream ss;
                   ss << "--lookat " << camera.eye().x << "," << camera.eye().y << ","
                      << camera.eye().z << "," << camera.center().x << ","
@@ -271,6 +306,15 @@ int ViewerApplication::run()
                   const auto str = ss.str();
                   glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
               }
+
+              if (ImGui::CollapsingHeader("Lighting"))
+              {
+                  ImGui::SliderFloat("theta", &light_theta, 0, glm::pi<float>());
+                  ImGui::SliderFloat("phi", &light_phi, 0, glm::pi<float>());
+                  ImGui::ColorEdit3("color", (float *)&light_col);
+                  ImGui::SliderFloat("intensity", &light_intensity, 0, 10.f);
+              }
+              ImGui::Checkbox("Light from Camera", &light_is_camera);
           }
           ImGui::End();
       }
