@@ -72,13 +72,13 @@ int ViewerApplication::run()
   // TODO Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
 //  FirstPersonCameraController cameraController{m_GLFWHandle.window(), camera_speed_percentage * maxDistance};
-  TrackballCameraController
-      cameraController(m_GLFWHandle.window(),
-                       camera_speed_percentage * maxDistance);
+  std::unique_ptr<CameraController> cameraController =
+      std::make_unique<TrackballCameraController>(m_GLFWHandle.window(),
+                                                  camera_speed_percentage * maxDistance);
   
   if (m_hasUserCamera)
   {
-      cameraController.setCamera(m_userCamera);
+      cameraController->setCamera(m_userCamera);
   }
   else
   {
@@ -86,7 +86,7 @@ int ViewerApplication::run()
       
       const auto eye = (bboxMax[2] - bboxMin[2] >= 0.0001)? bboxCenter + bboxDiag: bboxCenter + 2.f * glm::cross(bboxDiag, up);
 
-      cameraController.setCamera(Camera{bboxCenter, eye, up});
+      cameraController->setCamera(Camera{bboxCenter, eye, up});
   }
   
 
@@ -207,7 +207,7 @@ int ViewerApplication::run()
       const auto n = w*h*channels;
       std::vector<unsigned char> test_image(n);
       renderToImage(w, h, channels, test_image.data(),
-                    [&]() {drawScene(cameraController.getCamera());});
+                    [&]() {drawScene(cameraController->getCamera());});
       flipImageYAxis(w, h, channels, test_image.data());
       const auto strPath = m_OutputPath.string();
       stbi_write_png(
@@ -223,7 +223,7 @@ int ViewerApplication::run()
        ++iterationCount) {
     const auto seconds = glfwGetTime();
 
-    const auto camera = cameraController.getCamera();
+    const auto camera = cameraController->getCamera();
     drawScene(camera);
 
     // GUI code:
@@ -267,7 +267,7 @@ int ViewerApplication::run()
     auto guiHasFocus =
         ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
     if (!guiHasFocus) {
-      cameraController.update(float(ellapsedTime));
+      cameraController->update(float(ellapsedTime));
     }
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
