@@ -59,6 +59,10 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uLightCol");
 
 
+  const auto baseColorTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uBaseColorTexture");
+
+
 
   // bounding box
   glm::vec3 bboxMin, bboxMax, bboxCenter, bboxDiag;
@@ -74,7 +78,7 @@ int ViewerApplication::run()
 
   const auto camera_speed_percentage = 0.04f;
   
-  // TODO Implement a new CameraController model and use it instead. Propose the
+  // DONE Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
 //  FirstPersonCameraController cameraController{m_GLFWHandle.window(), camera_speed_percentage * maxDistance};
   std::vector<std::unique_ptr<CameraController>> cameras;
@@ -101,12 +105,40 @@ int ViewerApplication::run()
   }
   
 
+  // DONE creation of Textures
+  const auto textures = createTextureObjects(model);
+
+  // DONE creation of a white default texture
+  GLuint whiteTexture;
+  {
+      const float white[] = {1, 1, 1, 1};
+  
+      // Generate the texture object:
+      glGenTextures(1, &whiteTexture);
+  
+      // Bind texture object to target GL_TEXTURE_2D:
+      glBindTexture(GL_TEXTURE_2D, whiteTexture);
+      // Set image data:
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
+                   GL_RGB, GL_FLOAT, white);
+      // Set sampling parameters:
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      // Set wrapping parameters:
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+      glBindTexture(GL_TEXTURE_2D, 0);
+  }
+
+
 
   
-  // TODO Creation of Buffer Objects
+  // DONE Creation of Buffer Objects
   const auto vbos = createBufferObjects(model);
 
-  // TODO Creation of Vertex Array Objects
+  // DONE Creation of Vertex Array Objects
   std::vector<VaoRange> meshIndexToVaoRange;
   const auto vbas = createVertexArrayObjects(model,
                                              vbos,
@@ -125,6 +157,38 @@ int ViewerApplication::run()
   float light_theta = 0;
   float light_phi = 0;
   float light_intensity = 1.f;
+
+  const auto findTexture = [&] (const auto materialIndex)
+  {
+      if (materialIndex >= 0)
+      {
+          // only valid is materialIndex >= 0
+          const auto & material = model.materials[materialIndex];
+          const auto & pbrMetallicRoughness = material.pbrMetallicRoughness;
+
+          // only valid if pbrMetallicRoughness.baseColorTexture.index >= 0:
+          const auto & texture = model.textures[pbrMetallicRoughness.baseColorTexture.index];
+          const auto texture_obj = textures[texture.source];
+          
+          return texture_obj;
+      }
+      else
+      {
+          return whiteTexture;
+      }
+
+  };
+
+  const auto bindMaterial = [&](const auto materialIndex)
+  {
+      const auto tex = findTexture(materialIndex);
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, tex);
+      glUniform1i(baseColorTextureLocation, 0);
+
+  };
+
   
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera)
@@ -189,6 +253,8 @@ int ViewerApplication::run()
 
                 for (const auto & prim: mesh.primitives)
                 {
+                    bindMaterial(prim.material);
+
                     const auto & vao = vbas[vaoRange.begin + primIdx];
 
                     glBindVertexArray(vao);
@@ -513,3 +579,66 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
     return vertexArrayObjects;
 }
 
+
+
+
+std::vector<GLuint>
+ViewerApplication::createTextureObjects(const tinygltf::Model &model) const
+{
+    std::vector<GLuint> textures(model.textures.size(), 0);
+    
+    tinygltf::Sampler default_sampler;
+    default_sampler.minFilter = GL_LINEAR;
+    default_sampler.magFilter = GL_LINEAR;
+    default_sampler.wrapS = GL_REPEAT;
+    default_sampler.wrapT = GL_REPEAT;
+    default_sampler.wrapR = GL_REPEAT;
+
+
+    glActiveTexture(GL_TEXTURE0);
+
+    glGenTextures((GLsizei) model.textures.size(), textures.data());
+
+    auto i = 0;
+    for (const auto & tex: model.textures)
+    {
+        const GLuint & tex_obj = textures[i++];
+        
+        assert(tex.source >= 0);
+
+        const auto & image = model.images[tex.source];
+
+        const auto & sampler = tex.sampler >= 0 ? model.samplers[tex.sampler] : default_sampler;
+
+
+        glBindTexture(GL_TEXTURE_2D, tex_obj);
+        
+        // texture generation
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                     image.width, image.height,
+                     0, GL_RGBA, image.pixel_type,
+                     image.image.data());
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                        sampler.minFilter != -1 ? sampler.minFilter : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                        sampler.magFilter != -1 ? sampler.magFilter : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sampler.wrapS);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, sampler.wrapT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, sampler.wrapR);
+        
+        
+        if (sampler.minFilter == GL_NEAREST_MIPMAP_NEAREST ||
+            sampler.minFilter == GL_NEAREST_MIPMAP_LINEAR ||
+            sampler.minFilter == GL_LINEAR_MIPMAP_NEAREST ||
+            sampler.minFilter == GL_LINEAR_MIPMAP_LINEAR)
+        {
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return textures;
+
+}
