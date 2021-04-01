@@ -62,6 +62,26 @@ int ViewerApplication::run()
   const auto baseColorTextureLocation =
       glGetUniformLocation(glslProgram.glId(), "uBaseColorTexture");
 
+  const auto baseColorFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uBaseColorFactor");
+
+  const auto metallicFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uMetallicFactor");
+  const auto roughnessFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uRoughnessFactor");
+  const auto metallicRoughnessTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uMetallicRoughnessTexture");
+
+  const auto emissiveFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uEmissiveFactor");
+  const auto emissiveTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uEmissiveTexture");
+
+  const auto occlusionFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uOcclusionFactor");
+  const auto occlusionTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uOcclusionTexture");
+
 
 
   // bounding box
@@ -158,7 +178,26 @@ int ViewerApplication::run()
   float light_phi = 0;
   float light_intensity = 1.f;
 
-  const auto findTexture = [&] (const auto materialIndex)
+  const auto load_texture = [&](const auto index, const auto texture_slot, const auto location, const auto default_texture)
+  {
+      auto texture_obj = default_texture;
+      if (index >= 0)
+      {
+          const auto & texture = model.textures[index];
+          if (texture.source >= 0)
+          {
+              texture_obj = textures[texture.source];
+          }
+      }
+
+      glActiveTexture(GL_TEXTURE0 + texture_slot);
+      glBindTexture(GL_TEXTURE_2D, texture_obj);
+      glUniform1i(location, texture_slot);
+              
+      
+  };
+  
+  const auto bindMaterial = [&] (const auto materialIndex)
   {
       if (materialIndex >= 0)
       {
@@ -166,28 +205,78 @@ int ViewerApplication::run()
           const auto & material = model.materials[materialIndex];
           const auto & pbrMetallicRoughness = material.pbrMetallicRoughness;
 
-          // only valid if pbrMetallicRoughness.baseColorTexture.index >= 0:
-          const auto & texture = model.textures[pbrMetallicRoughness.baseColorTexture.index];
-          const auto texture_obj = textures[texture.source];
+          glUniform4f(baseColorFactorLocation,
+                      (float)pbrMetallicRoughness.baseColorFactor[0],
+                      (float)pbrMetallicRoughness.baseColorFactor[1],
+                      (float)pbrMetallicRoughness.baseColorFactor[2],
+                      (float)pbrMetallicRoughness.baseColorFactor[3]);
+
+          load_texture(pbrMetallicRoughness.baseColorTexture.index,
+                       0, baseColorTextureLocation, whiteTexture);
+
+          glUniform1f(metallicFactorLocation,
+                      (float)pbrMetallicRoughness.metallicFactor);
+          glUniform1f(roughnessFactorLocation,
+                      (float)pbrMetallicRoughness.roughnessFactor);
+
+
+          load_texture(pbrMetallicRoughness.metallicRoughnessTexture.index,
+                       1, metallicRoughnessTextureLocation, 0);
+
+
+          glUniform3f(emissiveFactorLocation,
+                      (float)material.emissiveFactor[0],
+                      (float)material.emissiveFactor[1],
+                      (float)material.emissiveFactor[2]);
+
+          load_texture(material.emissiveTexture.index,
+                       2, emissiveTextureLocation, 0);
+
           
-          return texture_obj;
+          glUniform1f(occlusionFactorLocation,
+                      (float) material.occlusionTexture.strength);
+
+
+          load_texture(material.occlusionTexture.index,
+                       3, occlusionTextureLocation, whiteTexture);
+          
       }
       else
       {
-          return whiteTexture;
+          glUniform4f(baseColorFactorLocation,
+                      1.f,
+                      1.f,
+                      1.f,
+                      1.f);
+
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, whiteTexture);
+          glUniform1i(baseColorTextureLocation, 0);
+
+          glUniform1f(metallicFactorLocation, 1.f);
+          glUniform1f(roughnessFactorLocation, 1.f);
+
+          glActiveTexture(GL_TEXTURE1);
+          glBindTexture(GL_TEXTURE_2D, 0);
+          glUniform1i(metallicRoughnessTextureLocation, 1);
+
+          glUniform3f(emissiveFactorLocation, 0.f, 0.f, 0.f);
+
+          glActiveTexture(GL_TEXTURE2);
+          glBindTexture(GL_TEXTURE_2D, 0);
+          glUniform1i(emissiveTextureLocation, 2);
+
+          glUniform1f(occlusionFactorLocation, 0.f);
+
+          glActiveTexture(GL_TEXTURE3);
+          glBindTexture(GL_TEXTURE_2D, 0);
+          glUniform1i(occlusionTextureLocation, 3);
+
+          
       }
 
   };
 
-  const auto bindMaterial = [&](const auto materialIndex)
-  {
-      const auto tex = findTexture(materialIndex);
-
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, tex);
-      glUniform1i(baseColorTextureLocation, 0);
-
-  };
 
   
   // Lambda function to draw the scene
