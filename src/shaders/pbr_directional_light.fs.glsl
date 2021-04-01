@@ -102,23 +102,29 @@ mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
     return mat3( T * invmax, B * invmax, N );
 }
 
+
+const int WITH_NORMALMAP_UNSIGNED = 2;
+const int WITH_NORMALMAP_2CHANNEL = 4;
+const int WITH_NORMALMAP_GREEN_UP = 8;
+
 vec3 perturb_normal( vec3 N, vec3 V, vec2 texcoord )
 {
     // assume N, the interpolated vertex normal and
     // V, the view vector (vertex to eye)
     vec3 map = texture2D( uNormalTexture, texcoord ).xyz;
-    /*
-#ifdef WITH_NORMALMAP_UNSIGNED
-    map = map * 255./127. - 128./127.;
-#endif #ifdef WITH_NORMALMAP_2CHANNEL
-    map.z = sqrt( 1. - dot( map.xy, map.xy ) );
-#endif #ifdef WITH_NORMALMAP_GREEN_UP
-    map.y = -map.y;
-#endif
-*/
-    map = map * 255./127. - 128./127.;
-    map.y = -map.y;
-    
+
+    if ((uUseNormal & WITH_NORMALMAP_UNSIGNED) != 0)
+    {
+        map = map * 255./127. - 128./127.;
+    }
+    if ((uUseNormal & WITH_NORMALMAP_2CHANNEL) != 0)
+    {
+        map.z = sqrt( 1. - dot( map.xy, map.xy ) );
+    }
+    if ((uUseNormal & WITH_NORMALMAP_GREEN_UP) != 0)
+    {
+        map.y = -map.y;
+    }
     mat3 TBN = cotangent_frame( N, -V, texcoord );
     return normalize( TBN * map );
 }

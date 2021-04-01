@@ -206,7 +206,9 @@ int ViewerApplication::run()
   float light_intensity = 1.f;
   bool apply_occlusion = true;
   bool apply_normal_map = true;
-
+  bool normal_option_unsigned = false;
+  bool normal_option_2chan = false;
+  bool normal_option_greenup = true;
   const auto load_texture = [&](const auto index, const auto texture_slot, const auto location, const auto default_texture)
   {
       auto texture_obj = default_texture;
@@ -277,7 +279,10 @@ int ViewerApplication::run()
           if (apply_normal_map)
           {
 
-              glUniform1i(useNormalLocation, (GLuint) apply_normal_map);
+              glUniform1i(useNormalLocation, 1
+                          + (((GLuint) normal_option_unsigned) << 1)
+                          + (((GLuint) normal_option_2chan) << 2)
+                          + (((GLuint) normal_option_greenup)) << 3);
               load_texture(material.normalTexture.index,
                            4, normalTextureLocation, defaultNormalMapTexture);
           }
@@ -525,6 +530,12 @@ int ViewerApplication::run()
                   ImGui::Checkbox("Light from Camera", &light_is_camera);
                   ImGui::Checkbox("Occlusion", &apply_occlusion);
                   ImGui::Checkbox("Normal Maps", &apply_normal_map);
+                  
+                  ImGui::Checkbox("unsigned", &normal_option_unsigned);
+                  ImGui::SameLine();
+                  ImGui::Checkbox("2 channels", &normal_option_2chan);
+                  ImGui::SameLine();
+                  ImGui::Checkbox("green up", &normal_option_greenup);
                   
               }
           }
