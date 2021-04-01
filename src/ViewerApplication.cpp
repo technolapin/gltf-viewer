@@ -82,6 +82,11 @@ int ViewerApplication::run()
   const auto occlusionTextureLocation =
       glGetUniformLocation(glslProgram.glId(), "uOcclusionTexture");
 
+  const auto normalTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uNormalTexture");
+  const auto useNormalLocation =
+      glGetUniformLocation(glslProgram.glId(), "uUseNormal");
+
 
 
   // bounding box
@@ -151,6 +156,28 @@ int ViewerApplication::run()
 
       glBindTexture(GL_TEXTURE_2D, 0);
   }
+  GLuint defaultNormalMapTexture;
+  {
+      const float normal[] = {0, 0, 1, 0};
+  
+      // Generate the texture object:
+      glGenTextures(1, &defaultNormalMapTexture);
+  
+      // Bind texture object to target GL_TEXTURE_2D:
+      glBindTexture(GL_TEXTURE_2D, defaultNormalMapTexture);
+      // Set image data:
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
+                   GL_RGB, GL_FLOAT, normal);
+      // Set sampling parameters:
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      // Set wrapping parameters:
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+      glBindTexture(GL_TEXTURE_2D, 0);
+  }
 
 
 
@@ -178,6 +205,7 @@ int ViewerApplication::run()
   float light_phi = 0;
   float light_intensity = 1.f;
   bool apply_occlusion = true;
+  bool apply_normal_map = true;
 
   const auto load_texture = [&](const auto index, const auto texture_slot, const auto location, const auto default_texture)
   {
@@ -245,7 +273,23 @@ int ViewerApplication::run()
 
           load_texture(material.occlusionTexture.index,
                        3, occlusionTextureLocation, whiteTexture);
-          
+
+          if (apply_normal_map)
+          {
+
+              glUniform1i(useNormalLocation, (GLuint) apply_normal_map);
+              load_texture(material.normalTexture.index,
+                           4, normalTextureLocation, defaultNormalMapTexture);
+          }
+          else
+          {
+
+              glUniform1i(useNormalLocation, 0);
+              glActiveTexture(GL_TEXTURE4);
+              glBindTexture(GL_TEXTURE_2D, defaultNormalMapTexture);
+              glUniform1i(normalTextureLocation, 4);
+
+          }
       }
       else
       {
@@ -278,6 +322,10 @@ int ViewerApplication::run()
           glBindTexture(GL_TEXTURE_2D, 0);
           glUniform1i(occlusionTextureLocation, 3);
 
+
+          
+          glUniform1i(useNormalLocation, 0);
+
           
       }
 
@@ -291,30 +339,30 @@ int ViewerApplication::run()
       glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       
-    const auto viewMatrix = camera.getViewMatrix();
-
-    const auto sin_phi = std::sin(light_phi);
-    const auto cos_phi = std::cos(light_phi);
-    const auto sin_the = std::sin(light_theta);
-    const auto cos_the = std::cos(light_theta);
+      const auto viewMatrix = camera.getViewMatrix();
+      
+      const auto sin_phi = std::sin(light_phi);
+      const auto cos_phi = std::cos(light_phi);
+      const auto sin_the = std::sin(light_theta);
+      const auto cos_the = std::cos(light_theta);
     
-    const auto light_dir = glm::vec3(sin_the*cos_phi, cos_the, sin_the*sin_phi);
-
-    glm::vec3 light_viewspace_dir;
-
-    if (light_is_camera)
-    {
-        light_viewspace_dir = glm::vec3(0, 0, 1);
-    }
-    else
-    {
-        light_viewspace_dir = glm::normalize(glm::vec3(viewMatrix * glm::vec4(light_dir, 0)));
-    }
-
-    const auto light_intensity_color = light_intensity * light_col;
-    
-    glUniform3fv(lightDirLocation, 1, glm::value_ptr(light_viewspace_dir));
-    glUniform3fv(lightColLocation, 1, glm::value_ptr(light_intensity_color));
+      const auto light_dir = glm::vec3(sin_the*cos_phi, cos_the, sin_the*sin_phi);
+      
+      glm::vec3 light_viewspace_dir;
+      
+      if (light_is_camera)
+      {
+          light_viewspace_dir = glm::vec3(0, 0, 1);
+      }
+      else
+      {
+          light_viewspace_dir = glm::normalize(glm::vec3(viewMatrix * glm::vec4(light_dir, 0)));
+      }
+      
+      const auto light_intensity_color = light_intensity * light_col;
+      
+      glUniform3fv(lightDirLocation, 1, glm::value_ptr(light_viewspace_dir));
+      glUniform3fv(lightColLocation, 1, glm::value_ptr(light_intensity_color));
 
     
     // The recursive function that should draw a node
@@ -476,6 +524,7 @@ int ViewerApplication::run()
                   ImGui::SliderFloat("intensity", &light_intensity, 0, 10.f); 
                   ImGui::Checkbox("Light from Camera", &light_is_camera);
                   ImGui::Checkbox("Occlusion", &apply_occlusion);
+                  ImGui::Checkbox("Normal Maps", &apply_normal_map);
                   
               }
           }

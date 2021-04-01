@@ -21,6 +21,9 @@ uniform sampler2D uEmissiveTexture;
 uniform float uOcclusionFactor;
 uniform sampler2D uOcclusionTexture;
 
+uniform sampler2D uNormalTexture;
+uniform int uUseNormal;
+
 out vec3 fColor;
 
 // Constants
@@ -62,12 +65,76 @@ float fresnel_mix(float ior, float base, float layer, float VdotH)
 }
 
 
+mat3 inverse3x3( mat3 M )
+{
+    // The original was written in HLSL, but this is GLSL,
+    // therefore
+    // - the array index selects columns, so M_t[0] is the
+    // first row of M, etc.
+    // - the mat3 constructor assembles columns, so
+    // cross( M_t[1], M_t[2] ) becomes the first column
+    // of the adjugate, etc.
+    // - for the determinant, it does not matter whether it is
+    // computed with M or with M_t; but using M_t makes it
+    // easier to follow the derivation in the text
+    mat3 M_t = transpose( M );
+    float det = dot( cross( M_t[0], M_t[1] ), M_t[2] );
+    mat3 adjugate = mat3( cross( M_t[1], M_t[2] ), cross( M_t[2], M_t[0] ), cross( M_t[0], M_t[1] ) );
+    return adjugate / det;
+}
+
+
+
+mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
+{
+    // get edge vectors of the pixel triangle
+    vec3 dp1 = dFdx( p );
+    vec3 dp2 = dFdy( p );
+    vec2 duv1 = dFdx( uv );
+    vec2 duv2 = dFdy( uv );
+    // solve the linear system
+    vec3 dp2perp = cross( dp2, N );
+    vec3 dp1perp = cross( N, dp1 );
+    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+    // construct a scale-invariant frame
+    float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
+    return mat3( T * invmax, B * invmax, N );
+}
+
+vec3 perturb_normal( vec3 N, vec3 V, vec2 texcoord )
+{
+    // assume N, the interpolated vertex normal and
+    // V, the view vector (vertex to eye)
+    vec3 map = texture2D( uNormalTexture, texcoord ).xyz;
+    /*
+#ifdef WITH_NORMALMAP_UNSIGNED
+    map = map * 255./127. - 128./127.;
+#endif #ifdef WITH_NORMALMAP_2CHANNEL
+    map.z = sqrt( 1. - dot( map.xy, map.xy ) );
+#endif #ifdef WITH_NORMALMAP_GREEN_UP
+    map.y = -map.y;
+#endif
+*/
+    map = map * 255./127. - 128./127.;
+    map.y = -map.y;
+    
+    mat3 TBN = cotangent_frame( N, -V, texcoord );
+    return normalize( TBN * map );
+}
+
+
 void main()
 {
   vec3 N = normalize(vViewSpaceNormal);
   vec3 L = uLightDir;
   vec3 V = normalize(-vViewSpacePosition);
   vec3 H = normalize(L+V);
+
+  if (uUseNormal != 0)
+  {
+      N = perturb_normal( N, V, vTexCoords );
+  }
   
   vec4 metallicFactors = texture(uMetallicRoughnessTexture, vTexCoords);
 
