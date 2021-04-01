@@ -88,7 +88,7 @@ int ViewerApplication::run()
   glm::vec3 bboxMin, bboxMax, bboxCenter, bboxDiag;
   computeSceneBounds(model, bboxMin, bboxMax);
   bboxCenter = (bboxMin + bboxMax)*0.5f;
-  bboxDiag = glm::normalize(bboxMin - bboxMax);
+  bboxDiag = bboxMax - bboxMin;
 
   // Build projection matrix
   const auto maxDistance = std::max(100.f, glm::length(bboxDiag));
@@ -119,9 +119,9 @@ int ViewerApplication::run()
   {
       const auto up = glm::vec3(0, 1, 0);
       
-      const auto eye = (bboxMax[2] - bboxMin[2] >= 0.0001)? bboxCenter + bboxDiag: bboxCenter + 2.f * glm::cross(bboxDiag, up);
+      const auto eye = (bboxDiag.z >= 0.0001)? bboxCenter + bboxDiag: bboxCenter + 2.f * glm::cross(bboxDiag, up);
 
-      cameras[camera_index]->setCamera(Camera{bboxCenter, eye, up});
+      cameras[camera_index]->setCamera(Camera{eye, bboxCenter, up});
   }
   
 
@@ -177,6 +177,7 @@ int ViewerApplication::run()
   float light_theta = 0;
   float light_phi = 0;
   float light_intensity = 1.f;
+  bool apply_occlusion = true;
 
   const auto load_texture = [&](const auto index, const auto texture_slot, const auto location, const auto default_texture)
   {
@@ -232,10 +233,15 @@ int ViewerApplication::run()
           load_texture(material.emissiveTexture.index,
                        2, emissiveTextureLocation, 0);
 
-          
-          glUniform1f(occlusionFactorLocation,
-                      (float) material.occlusionTexture.strength);
-
+          if (apply_occlusion)
+          {
+              glUniform1f(occlusionFactorLocation,
+                          (float) material.occlusionTexture.strength);
+          }
+          else
+          {
+              glUniform1f(occlusionFactorLocation, 0.f);
+          }
 
           load_texture(material.occlusionTexture.index,
                        3, occlusionTextureLocation, whiteTexture);
@@ -467,9 +473,11 @@ int ViewerApplication::run()
                   ImGui::SliderFloat("theta", &light_theta, 0, glm::pi<float>());
                   ImGui::SliderFloat("phi", &light_phi, 0, glm::pi<float>());
                   ImGui::ColorEdit3("color", (float *)&light_col);
-                  ImGui::SliderFloat("intensity", &light_intensity, 0, 10.f);
+                  ImGui::SliderFloat("intensity", &light_intensity, 0, 10.f); 
+                  ImGui::Checkbox("Light from Camera", &light_is_camera);
+                  ImGui::Checkbox("Occlusion", &apply_occlusion);
+                  
               }
-              ImGui::Checkbox("Light from Camera", &light_is_camera);
           }
           ImGui::End();
       }
