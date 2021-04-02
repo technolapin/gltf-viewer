@@ -19,6 +19,32 @@ const GLuint VERTEX_ATTRIB_NORMAL_IDX = 1;
 const GLuint VERTEX_ATTRIB_TEXCOORD0_IDX = 2;
 
 
+#include <chrono>
+#include <unistd.h> // usleep
+struct Delayer
+{
+    std::chrono::time_point<std::chrono::steady_clock> clock;
+    int delay;
+
+    Delayer(int microseconds):
+        clock(std::chrono::steady_clock::now()),
+        delay(microseconds)
+    {}
+
+
+    
+    ~Delayer()
+    {
+        auto elapsed = std::chrono::steady_clock::now() - clock;
+        auto rest = delay - std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+        if (rest > 0)
+        {
+            usleep(rest);
+        }
+    }
+    
+};
+
 
 
 
@@ -209,6 +235,14 @@ int ViewerApplication::run()
   bool normal_option_unsigned = false;
   bool normal_option_2chan = false;
   bool normal_option_greenup = true;
+
+  const auto bind_texture = [&](const auto tex, const auto texture_slot, const auto location)
+  {
+      glActiveTexture(GL_TEXTURE0 + texture_slot);
+      glBindTexture(GL_TEXTURE_2D, tex);
+      glUniform1i(location, texture_slot);
+  };
+
   const auto load_texture = [&](const auto index, const auto texture_slot, const auto location, const auto default_texture)
   {
       auto texture_obj = default_texture;
@@ -221,12 +255,10 @@ int ViewerApplication::run()
           }
       }
 
-      glActiveTexture(GL_TEXTURE0 + texture_slot);
-      glBindTexture(GL_TEXTURE_2D, texture_obj);
-      glUniform1i(location, texture_slot);
-              
-      
+      bind_texture(texture_obj, texture_slot, location);
   };
+
+
   
   const auto bindMaterial = [&] (const auto materialIndex)
   {
@@ -276,7 +308,8 @@ int ViewerApplication::run()
           load_texture(material.occlusionTexture.index,
                        3, occlusionTextureLocation, whiteTexture);
 
-          if (apply_normal_map)
+          // we do not use a default normal map
+          if (apply_normal_map && material.normalTexture.index >= 0)
           {
 
               glUniform1i(useNormalLocation, 1
@@ -298,37 +331,29 @@ int ViewerApplication::run()
       }
       else
       {
+          std::cout << "no material found \n";
           glUniform4f(baseColorFactorLocation,
                       1.f,
                       1.f,
                       1.f,
                       1.f);
 
-          glActiveTexture(GL_TEXTURE0);
-          glBindTexture(GL_TEXTURE_2D, whiteTexture);
-          glUniform1i(baseColorTextureLocation, 0);
+          bind_texture(whiteTexture, 0, baseColorTextureLocation);
 
           glUniform1f(metallicFactorLocation, 1.f);
           glUniform1f(roughnessFactorLocation, 1.f);
 
-          glActiveTexture(GL_TEXTURE1);
-          glBindTexture(GL_TEXTURE_2D, 0);
-          glUniform1i(metallicRoughnessTextureLocation, 1);
+          bind_texture(whiteTexture, 1, metallicRoughnessTextureLocation);
 
           glUniform3f(emissiveFactorLocation, 0.f, 0.f, 0.f);
 
-          glActiveTexture(GL_TEXTURE2);
-          glBindTexture(GL_TEXTURE_2D, 0);
-          glUniform1i(emissiveTextureLocation, 2);
+          bind_texture(0, 2, emissiveTextureLocation);
 
           glUniform1f(occlusionFactorLocation, 0.f);
 
-          glActiveTexture(GL_TEXTURE3);
-          glBindTexture(GL_TEXTURE_2D, 0);
-          glUniform1i(occlusionTextureLocation, 3);
-
-
+          bind_texture(0, 3, occlusionTextureLocation);
           
+          bind_texture(0, 4, normalTextureLocation);
           glUniform1i(useNormalLocation, 0);
 
           
@@ -430,14 +455,15 @@ int ViewerApplication::run()
                 }
 
 
-                for (const auto & child: node.children)
-                {
-                    drawNode(child, modelMatrix);
-                }
-
+            
             
             }
+            for (const auto & child: node.children)
+            {
+                drawNode(child, modelMatrix);
+            }
 
+            
         };
 
 
@@ -474,7 +500,9 @@ int ViewerApplication::run()
 
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
-       ++iterationCount) {
+       ++iterationCount)
+  {
+      Delayer _delayer(1000000/120);
       const auto seconds = glfwGetTime();
 
       const auto camera = cameras[camera_index]->getCamera();
