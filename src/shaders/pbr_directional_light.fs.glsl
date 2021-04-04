@@ -3,6 +3,8 @@
 in vec3 vViewSpaceNormal;
 in vec2 vTexCoords;
 in vec3 vViewSpacePosition;
+in vec3 vWorldSpacePosition;
+in mat3 vTBN;
 
 uniform vec3 uLightDir;
 uniform vec3 uLightCol;
@@ -23,6 +25,8 @@ uniform sampler2D uOcclusionTexture;
 
 uniform sampler2D uNormalTexture;
 uniform int uUseNormal;
+
+uniform int uRenderMode;
 
 out vec3 fColor;
 
@@ -85,6 +89,9 @@ mat3 inverse3x3( mat3 M )
 
 
 
+
+
+
 mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
 {
     // get edge vectors of the pixel triangle
@@ -106,6 +113,17 @@ mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
 const int WITH_NORMALMAP_UNSIGNED = 2;
 const int WITH_NORMALMAP_2CHANNEL = 4;
 const int WITH_NORMALMAP_GREEN_UP = 8;
+const int WITH_ON_FLY = 16;
+const int MODE_STANDARD = 0;
+const int MODE_NORMAL = 1;
+const int MODE_NORMAL_MAP = 2;
+const int MODE_POSITION_VARIATION_X = 3;
+const int MODE_POSITION_VARIATION_Y = 4;
+const int MODE_UV_VARIATION_X = 5;
+const int MODE_UV_VARIATION_Y = 6;
+const int MODE_UV = 7;
+const int MODE_POS_WORLD = 8;
+const int MODE_POS_VIEW = 9;
 
 vec3 perturb_normal( vec3 N, vec3 V, vec2 texcoord )
 {
@@ -125,8 +143,17 @@ vec3 perturb_normal( vec3 N, vec3 V, vec2 texcoord )
     {
         map.y = -map.y;
     }
-    mat3 TBN = cotangent_frame( N, -V, texcoord );
-    return normalize( TBN * map );
+
+    if ((uUseNormal & WITH_ON_FLY) != 0)
+    {
+        mat3 TBN = cotangent_frame( N, V, texcoord );
+        return normalize( TBN * map );
+    }
+    else
+    {
+        return normalize( vTBN * map );
+    }
+    
 }
 
 
@@ -139,7 +166,7 @@ void main()
 
   if (uUseNormal != 0)
   {
-      N = perturb_normal( N, V, vTexCoords );
+      N = perturb_normal( N, -V, vTexCoords );
   }
   
   vec4 metallicFactors = texture(uMetallicRoughnessTexture, vTexCoords);
@@ -148,6 +175,7 @@ void main()
   float baseMetallic = metallicFactors.b;
   
   
+
   vec4 baseColorFromTexture = 
       SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords));
   vec4 baseColor = baseColorFromTexture * uBaseColorFactor;
@@ -208,6 +236,53 @@ void main()
       float occl = texture2D(uOcclusionTexture, vTexCoords).r;
       color = mix(color, color * occl, uOcclusionFactor);
   }
-  
-  fColor = LINEARtoSRGB(color);
+
+  if (uRenderMode == MODE_STANDARD)
+  {
+      fColor = LINEARtoSRGB(color);
+  }
+  else if (uRenderMode == MODE_NORMAL)
+  {
+      fColor = N;
+  }
+  else if (uRenderMode == MODE_NORMAL_MAP)
+  {
+      fColor = texture(uNormalTexture, vTexCoords).rgb;
+  }
+  else if (uRenderMode == MODE_POSITION_VARIATION_X)
+  {
+    vec3 dp = dFdx( vViewSpacePosition );
+
+    fColor = dp*10.;
+  }
+  else if (uRenderMode == MODE_POSITION_VARIATION_Y)
+  {
+    vec3 dp = dFdy( vViewSpacePosition );
+
+    fColor = dp*10.;
+  }
+  else if (uRenderMode == MODE_UV_VARIATION_X)
+  {
+    vec2 dp = dFdx( vTexCoords );
+
+    fColor = vec3(dp, 0)*100.;
+  }
+  else if (uRenderMode == MODE_UV_VARIATION_Y)
+  {
+    vec2 dp = dFdy( vTexCoords );
+
+    fColor = vec3(dp, 0)*100.;
+  }
+  else if (uRenderMode == MODE_UV)
+  {
+    fColor = vec3(vTexCoords, 0);
+  }
+  else if (uRenderMode == MODE_POS_WORLD)
+  {
+    fColor = vWorldSpacePosition;
+  }
+  else if (uRenderMode == MODE_POS_VIEW)
+  {
+    fColor = -vViewSpacePosition;
+  }
 }

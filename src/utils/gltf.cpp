@@ -104,7 +104,7 @@ void computeSceneBounds(
                       indexByteStride ? indexByteStride : sizeof(uint32_t);
                   break;
                 }
-
+                
                 for (size_t i = 0; i < indexAccessor.count; ++i) {
                   uint32_t index = 0;
                   switch (indexAccessor.componentType) {
@@ -130,6 +130,7 @@ void computeSceneBounds(
                   bboxMax = glm::max(bboxMax, worldPosition);
                 }
               } else {
+
                 for (size_t i = 0; i < positionAccessor.count; ++i) {
                   const auto &localPosition =
                       *((const glm::vec3 *)&positionBuffer
@@ -151,3 +152,5 @@ void computeSceneBounds(
     }
   }
 }
+
+

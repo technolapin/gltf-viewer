@@ -14,9 +14,31 @@
 #include <tiny_gltf.h>
 
 #include "utils/gltf.hpp"
+
+#include <math.h> 
+
+#include <unordered_map>
+
 const GLuint VERTEX_ATTRIB_POSITION_IDX = 0;
 const GLuint VERTEX_ATTRIB_NORMAL_IDX = 1;
 const GLuint VERTEX_ATTRIB_TEXCOORD0_IDX = 2;
+const GLuint VERTEX_ATTRIB_TANGENT_IDX = 3;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #include <chrono>
@@ -76,6 +98,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
   const auto modelViewMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
+  const auto modelMatrixLocation =
+      glGetUniformLocation(glslProgram.glId(), "uModelMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
@@ -112,7 +136,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uNormalTexture");
   const auto useNormalLocation =
       glGetUniformLocation(glslProgram.glId(), "uUseNormal");
-
+  const auto renderModeLocation =
+      glGetUniformLocation(glslProgram.glId(), "uRenderMode");
 
 
   // bounding box
@@ -127,7 +152,7 @@ int ViewerApplication::run()
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
           0.001f * maxDistance, 1.5f * maxDistance);
 
-  const auto camera_speed_percentage = 0.04f;
+  const auto camera_speed_percentage = 0.1f;
   
   // DONE Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
@@ -232,10 +257,14 @@ int ViewerApplication::run()
   float light_intensity = 1.f;
   bool apply_occlusion = true;
   bool apply_normal_map = true;
-  bool normal_option_unsigned = false;
+  bool normal_option_unsigned = true;
   bool normal_option_2chan = false;
-  bool normal_option_greenup = true;
-
+  bool normal_option_greenup = false;
+  bool normal_compute_on_fly = false;
+  int render_mode = 0;
+  int fps = 200;
+  
+  
   const auto bind_texture = [&](const auto tex, const auto texture_slot, const auto location)
   {
       glActiveTexture(GL_TEXTURE0 + texture_slot);
@@ -315,7 +344,8 @@ int ViewerApplication::run()
               glUniform1i(useNormalLocation, 1
                           + (((GLuint) normal_option_unsigned) << 1)
                           + (((GLuint) normal_option_2chan) << 2)
-                          + (((GLuint) normal_option_greenup)) << 3);
+                          + (((GLuint) normal_option_greenup) << 3)
+                          + (((GLuint) normal_compute_on_fly) << 4));
               load_texture(material.normalTexture.index,
                            4, normalTextureLocation, defaultNormalMapTexture);
           }
@@ -368,6 +398,8 @@ int ViewerApplication::run()
   {
       glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+      glUniform1i(renderModeLocation, render_mode);
       
       const auto viewMatrix = camera.getViewMatrix();
       
@@ -394,7 +426,7 @@ int ViewerApplication::run()
       glUniform3fv(lightDirLocation, 1, glm::value_ptr(light_viewspace_dir));
       glUniform3fv(lightColLocation, 1, glm::value_ptr(light_intensity_color));
 
-    
+
     // The recursive function that should draw a node
     // We use a std::function because a simple lambda cannot be recursive
     const std::function<void(int, const glm::mat4 &)> drawNode =
@@ -404,11 +436,14 @@ int ViewerApplication::run()
             const auto & node = model.nodes[nodeIdx];
             const auto modelMatrix = getLocalToWorldMatrix(node, parentMatrix); 
             if (node.mesh >= 0)
-            {
+            { 
                 const auto modelViewMatrix = viewMatrix * modelMatrix;
                 const auto modelViewProjMatrix = projMatrix * modelViewMatrix;
                 const auto normalMatrix = glm::transpose(glm::inverse(modelViewMatrix));
 
+                glUniformMatrix4fv(modelMatrixLocation,
+                                   1, GL_FALSE,
+                                   glm::value_ptr(modelMatrix));
                 glUniformMatrix4fv(modelViewMatrixLocation,
                                    1, GL_FALSE,
                                    glm::value_ptr(modelViewMatrix));
@@ -428,6 +463,8 @@ int ViewerApplication::run()
                 {
                     bindMaterial(prim.material);
 
+                    
+                    
                     const auto & vao = vbas[vaoRange.begin + primIdx];
 
                     glBindVertexArray(vao);
@@ -497,12 +534,12 @@ int ViewerApplication::run()
       return 0;
   }
 
-
+  
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
        ++iterationCount)
   {
-      Delayer _delayer(1000000/120);
+      Delayer _delayer(1000000/fps);
       const auto seconds = glfwGetTime();
 
       const auto camera = cameras[camera_index]->getCamera();
@@ -515,6 +552,7 @@ int ViewerApplication::run()
           ImGui::Begin("GUI");
           ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                       1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+          ImGui::SliderInt("FPS LIMITER", &fps, 10, 1000);
           if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
 
               const auto prev_camera_index = camera_index;
@@ -558,15 +596,34 @@ int ViewerApplication::run()
                   ImGui::Checkbox("Light from Camera", &light_is_camera);
                   ImGui::Checkbox("Occlusion", &apply_occlusion);
                   ImGui::Checkbox("Normal Maps", &apply_normal_map);
-                  
-                  ImGui::Checkbox("unsigned", &normal_option_unsigned);
-                  ImGui::SameLine();
-                  ImGui::Checkbox("2 channels", &normal_option_2chan);
-                  ImGui::SameLine();
-                  ImGui::Checkbox("green up", &normal_option_greenup);
+
+                  if (apply_normal_map)
+                  {
+                      ImGui::Checkbox("Compute tangents on the fly", &normal_compute_on_fly);
+                      ImGui::Checkbox("unsigned", &normal_option_unsigned);
+                      ImGui::SameLine();
+                      ImGui::Checkbox("2 channels", &normal_option_2chan);
+                      ImGui::SameLine();
+                      ImGui::Checkbox("green up", &normal_option_greenup);
+                  }
                   
               }
           }
+
+          if (ImGui::CollapsingHeader("Render Mode"))
+          {
+              ImGui::RadioButton("Full", &render_mode, 0);
+              ImGui::RadioButton("Show Normals", &render_mode, 1);
+              ImGui::RadioButton("Normal Map", &render_mode, 2);
+              ImGui::RadioButton("Pos Variation X", &render_mode, 3);
+              ImGui::RadioButton("Pos Variation Y", &render_mode, 4);
+              ImGui::RadioButton("UV variation X", &render_mode, 5);
+              ImGui::RadioButton("UV variation Y", &render_mode, 6);
+              ImGui::RadioButton("UV", &render_mode, 7);
+              ImGui::RadioButton("WorldSpace Position", &render_mode, 8);
+              ImGui::RadioButton("Viewspace Position", &render_mode, 9);
+          }
+
           ImGui::End();
       }
 
@@ -677,7 +734,6 @@ std::vector<GLuint> ViewerApplication::createBufferObjects(
     return bufferObjects;
 }
 
-#include <typeinfo>  
 
 
 
@@ -688,7 +744,6 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                                             std::vector<VaoRange> & meshIndexToVaoRange) const
 {
     std::vector<GLuint> vertexArrayObjects;
-
     for (auto const & mesh: model.meshes)
     {
         const auto vaoOffset = (GLsizei) vertexArrayObjects.size();
@@ -700,6 +755,7 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
         glGenVertexArrays(n_primitives, vertexArrayObjects.data() + vaoOffset);
 
         auto prim_off = vaoOffset;
+        auto pIdx = 0;
         for (auto const & primitive: mesh.primitives)
         {
             auto vao = vertexArrayObjects[prim_off];
@@ -711,6 +767,7 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                     {"POSITION", VERTEX_ATTRIB_POSITION_IDX},
                     {"NORMAL", VERTEX_ATTRIB_NORMAL_IDX},
                     {"TEXCOORD_0", VERTEX_ATTRIB_TEXCOORD0_IDX},
+                    {"TANGENT", VERTEX_ATTRIB_TANGENT_IDX},
                 };
 
             for (const auto name_and_attrib: attributes)
@@ -728,7 +785,7 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                     const auto bufferObject = bufferObjects[bufferIdx]; 
                     
                     glEnableVertexAttribArray(attrib);
-                    glEnableVertexAttribArray(VERTEX_ATTRIB_POSITION_IDX);
+                    //glEnableVertexAttribArray(VERTEX_ATTRIB_POSITION_IDX);
                     
                     glBindBuffer(GL_ARRAY_BUFFER, bufferObject);
                     const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
@@ -742,7 +799,6 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                 }
                                                                                                                                                                                                     
             }
-
 
             if (primitive.indices >= 0)
             {
@@ -827,3 +883,4 @@ ViewerApplication::createTextureObjects(const tinygltf::Model &model) const
     return textures;
 
 }
+
