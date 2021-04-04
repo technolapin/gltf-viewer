@@ -3,6 +3,13 @@
 #+AUTHOR: Clément Chomicki
 
 * Généralités
+** Utilisation
+   + Compilation
+     ~cmake_prepare && cmake_install~
+   + lancer le programme
+     ~./build/bin/gltf-viewer viewer <path-to-gltf>~
+
+     Les commandes ~view_helmet~ et autres fonctionnent toujours.
 ** Limitation des FPS
    Ma carte graphique produisait un fort sifflement en faisant tourner le programme (ma version et la version “triche” de la même façon).
    Je me suis longtemps demandé pourquoi, et j'ai finalement trouvé: le programme est trop performant et on était dans les 1000 fps, ce qui faisait probablement vibrer mon bus CPU <=> GPU ou alors un bus interne à la carte graphique.
