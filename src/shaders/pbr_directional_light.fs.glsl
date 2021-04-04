@@ -113,6 +113,7 @@ mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
 const int WITH_NORMALMAP_UNSIGNED = 2;
 const int WITH_NORMALMAP_2CHANNEL = 4;
 const int WITH_NORMALMAP_GREEN_UP = 8;
+const int WITH_ON_FLY = 16;
 const int MODE_STANDARD = 0;
 const int MODE_NORMAL = 1;
 const int MODE_NORMAL_MAP = 2;
@@ -156,10 +157,16 @@ void main()
 
   if (uUseNormal != 0)
   {
-      //N = perturb_normal( N, -V, vTexCoords );
-      N = texture(uNormalTexture, vTexCoords).rgb;
-      N = N * 2.0 - 1.0;
-      N = normalize(vTBN * N);
+      if ((uUseNormal & WITH_ON_FLY) != 0)
+      {
+          N = perturb_normal( N, -V, vTexCoords );
+      }
+      else
+      {
+          N = texture(uNormalTexture, vTexCoords).rgb;
+          N = N * 2.0 - 1.0;
+          N = normalize(vTBN * N);
+      }
   }
   
   vec4 metallicFactors = texture(uMetallicRoughnessTexture, vTexCoords);

@@ -40,274 +40,6 @@ const GLuint VERTEX_ATTRIB_TANGENT_IDX = 3;
 
 
 
-std::unordered_map<uint32_t, GLuint>
-computeTangents(const tinygltf::Model &model)
-{
-    
-    std::unordered_map<uint32_t, GLuint> bufferObjects;
-  if (model.defaultScene >= 0) {
-    const std::function<void(int, const glm::mat4 &)> updateBounds =
-        [&](int nodeIdx, const glm::mat4 &parentMatrix) {
-          const auto &node = model.nodes[nodeIdx];
-          const glm::mat4 modelMatrix =
-              getLocalToWorldMatrix(node, parentMatrix);
-          if (node.mesh >= 0) {
-            const auto &mesh = model.meshes[node.mesh];
-            for (size_t pIdx = 0; pIdx < mesh.primitives.size(); ++pIdx) {
-              const auto &primitive = mesh.primitives[pIdx];
-
-              if (bufferObjects.find(pIdx) != bufferObjects.end())
-              { // the primitice has already been processed
-                  continue;
-              }
-              
-              const auto positionAttrIdxIt = primitive.attributes.find("POSITION");
-              const auto normalAttrIdxIt = primitive.attributes.find("NORMAL");
-              const auto texcoordAttrIdxIt = primitive.attributes.find("TEXCOORD_0");
-
-              // we ignore if we miss data
-              if (positionAttrIdxIt == end(primitive.attributes)
-                  || normalAttrIdxIt == end(primitive.attributes)
-                  || texcoordAttrIdxIt == end(primitive.attributes))
-              {
-                continue;
-              }
-              
-              const auto &positionAccessor = model.accessors[(*positionAttrIdxIt).second];
-              const auto &normalAccessor = model.accessors[(*normalAttrIdxIt).second];
-              const auto &texcoordAccessor = model.accessors[(*texcoordAttrIdxIt).second];
-              if (positionAccessor.type != 3) {
-                std::cerr << "Position accessor with type != VEC3, skipping"
-                          << std::endl;
-                continue;
-              }
-              if (normalAccessor.type != 3) {
-                std::cerr << "Normal accessor with type != VEC3, skipping"
-                          << std::endl;
-                continue;
-              }
-              if (texcoordAccessor.type != 2) {
-                std::cerr << "Position accessor with type != VEC2, skipping"
-                          << std::endl;
-                continue;
-              }
-              const auto &positionBufferView =
-                  model.bufferViews[positionAccessor.bufferView];
-              const auto positionByteOffset =
-                  positionAccessor.byteOffset + positionBufferView.byteOffset;
-              const auto &positionBuffer =
-                  model.buffers[positionBufferView.buffer];
-              const auto positionByteStride =
-                  positionBufferView.byteStride ? positionBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              const auto &normalBufferView =
-                  model.bufferViews[normalAccessor.bufferView];
-              const auto normalByteOffset =
-                  normalAccessor.byteOffset + normalBufferView.byteOffset;
-              const auto &normalBuffer =
-                  model.buffers[normalBufferView.buffer];
-              const auto normalByteStride =
-                  normalBufferView.byteStride ? normalBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              const auto &texcoordBufferView =
-                  model.bufferViews[texcoordAccessor.bufferView];
-              const auto texcoordByteOffset =
-                  texcoordAccessor.byteOffset + texcoordBufferView.byteOffset;
-              const auto &texcoordBuffer =
-                  model.buffers[texcoordBufferView.buffer];
-              const auto texcoordByteStride =
-                  texcoordBufferView.byteStride ? texcoordBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              std::vector<uint32_t> indexes = {};
-              
-              if (primitive.indices >= 0) {
-                const auto &indexAccessor = model.accessors[primitive.indices];
-                const auto &indexBufferView =
-                    model.bufferViews[indexAccessor.bufferView];
-                const auto indexByteOffset =
-                    indexAccessor.byteOffset + indexBufferView.byteOffset;
-                const auto &indexBuffer = model.buffers[indexBufferView.buffer];
-                auto indexByteStride = indexBufferView.byteStride;
-
-                switch (indexAccessor.componentType) {
-                default:
-                  std::cerr
-                      << "Primitive index accessor with bad componentType "
-                      << indexAccessor.componentType << ", skipping it."
-                      << std::endl;
-                  continue;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint8_t);
-                  break;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint16_t);
-                  break;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint32_t);
-                  break;
-                }
-
-                
-                for (size_t i = 0; i < indexAccessor.count; ++i) {
-                  uint32_t index = 0;
-                  switch (indexAccessor.componentType) {
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                    index = *((const uint8_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                    index = *((const uint16_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                    index = *((const uint32_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  }
-
-                  indexes.push_back(index);
-
-                }
-              }
-              else
-              {
-                  for (size_t i = 0; i < positionAccessor.count; ++i) {
-                      indexes.push_back(i);
-                  }
-              }
-
-              const auto getPos = [&](const uint32_t i)
-              {
-                      return *((const glm::vec3 *)&positionBuffer
-                               .data[positionByteOffset + positionByteStride * i]);
-              };
-
-              const auto getNor = [&](const uint32_t i)
-              {
-                  return *((const glm::vec3 *)&normalBuffer
-                           .data[normalByteOffset + normalByteStride * i]);
-              };
-              const auto getUV = [&](const uint32_t i)
-              {
-                  return *((const glm::vec2 *)&texcoordBuffer
-                           .data[texcoordByteOffset + texcoordByteStride * i]);
-              };
-
-              
-              auto n = indexes.size();
-              
-              std::vector<std::vector<glm::vec3>> tangents(positionAccessor.count);
-
-              
-              // triangles
-              for (uint32_t i = 0; i < n ; i+=3)
-              {
-                  auto i0 = indexes[i];
-                  auto i1 = indexes[i+1];
-                  auto i2 = indexes[i+2];
-                  auto p0 = getPos(i0);
-                  auto p1 = getPos(i1);
-                  auto p2 = getPos(i2);
-                  auto n0 = getNor(i0);
-                  auto n1 = getNor(i1);
-                  auto n2 = getNor(i2);
-                  auto uv0 = getUV(i0);
-                  auto uv1 = getUV(i1);
-                  auto uv2 = getUV(i2);
-
-                  
-                  glm::vec3 edge1 = p1 - p0;
-                  glm::vec3 edge2 = p2 - p0;
-                  glm::vec2 deltaUV1 = uv1 - uv0;
-                  glm::vec2 deltaUV2 = uv2 - uv0; 
-
-                  
-                  auto normal = glm::normalize(glm::cross(edge1, edge2));
-
-                  
-                  float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-
-                  glm::vec3 tangent, bitangent;
-                  
-                  tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-                  tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-                  tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-
-                  if (isnan(tangent.x) || isnan(tangent.y) || isnan(tangent.z))
-                  {
-                      tangent = glm::vec3(0);
-                  }
-                  else
-                  {
-                      tangent = glm::normalize(tangent);
-
-                  }
-
-                  bitangent = glm::cross(normal, tangent);
-
-
-
-                  
-                  
-                  tangents[i0].push_back(tangent);
-                  tangents[i1].push_back(tangent);
-                  tangents[i2].push_back(tangent);
-              }
-
-              std::vector<glm::vec3> tangent_means(tangents.size());
-
-              for (auto i = 0; i < tangents.size(); ++i)
-              {
-                  tangent_means[i] = glm::vec3(0);
-                  for (const auto & tan: tangents[i])
-                  {
-                      tangent_means[i] += tan;
-                  }
-                  tangent_means[i] /= (float) tangents[i].size();
-              }
-              
-              GLuint vbo;
-              glGenBuffers(1, &vbo);
-
-              glBindBuffer(GL_ARRAY_BUFFER, vbo);
-              glBufferStorage(GL_ARRAY_BUFFER,
-                              tangent_means.size(), // Assume a Buffer has a data member variable of type std::vector
-                              tangent_means.data(), 0);
-              
-              
-
-              bufferObjects[pIdx] = vbo;
-              
-            }
-          }
-          for (const auto childNodeIdx : node.children) {
-            updateBounds(childNodeIdx, modelMatrix);
-          }
-        };
-    for (const auto nodeIdx : model.scenes[model.defaultScene].nodes) {
-      updateBounds(nodeIdx, glm::mat4(1));
-    }
-  }
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  return bufferObjects;
-  
-}
-
-
-
-
-
-
-
-
-
-
 
 #include <chrono>
 #include <unistd.h> // usleep
@@ -410,10 +142,7 @@ int ViewerApplication::run()
 
   // bounding box
   glm::vec3 bboxMin, bboxMax, bboxCenter, bboxDiag;
-  std::cout << "MARCO\n";
-  computeTangents(model);
   computeSceneBounds(model, bboxMin, bboxMax);
-  std::cout << "POLO\n";
   bboxCenter = (bboxMin + bboxMax)*0.5f;
   bboxDiag = bboxMax - bboxMin;
 
@@ -507,14 +236,11 @@ int ViewerApplication::run()
   // DONE Creation of Buffer Objects
   const auto vbos = createBufferObjects(model);
 
-  const auto tangents = computeTangents(model);
-  
   // DONE Creation of Vertex Array Objects
   std::vector<VaoRange> meshIndexToVaoRange;
   const auto vbas = createVertexArrayObjects(model,
                                              vbos,
-                                             meshIndexToVaoRange,
-                                             tangents);
+                                             meshIndexToVaoRange);
 
 
   
@@ -531,9 +257,10 @@ int ViewerApplication::run()
   float light_intensity = 1.f;
   bool apply_occlusion = true;
   bool apply_normal_map = true;
-  bool normal_option_unsigned = false;
+  bool normal_option_unsigned = true;
   bool normal_option_2chan = false;
-  bool normal_option_greenup = true;
+  bool normal_option_greenup = false;
+  bool normal_compute_on_fly = false;
   int render_mode = 0;
   
   
@@ -616,7 +343,8 @@ int ViewerApplication::run()
               glUniform1i(useNormalLocation, 1
                           + (((GLuint) normal_option_unsigned) << 1)
                           + (((GLuint) normal_option_2chan) << 2)
-                          + (((GLuint) normal_option_greenup)) << 3);
+                          + (((GLuint) normal_option_greenup) << 3)
+                          + (((GLuint) normal_compute_on_fly) << 4));
               load_texture(material.normalTexture.index,
                            4, normalTextureLocation, defaultNormalMapTexture);
           }
@@ -866,12 +594,19 @@ int ViewerApplication::run()
                   ImGui::Checkbox("Light from Camera", &light_is_camera);
                   ImGui::Checkbox("Occlusion", &apply_occlusion);
                   ImGui::Checkbox("Normal Maps", &apply_normal_map);
-                  
-                  ImGui::Checkbox("unsigned", &normal_option_unsigned);
-                  ImGui::SameLine();
-                  ImGui::Checkbox("2 channels", &normal_option_2chan);
-                  ImGui::SameLine();
-                  ImGui::Checkbox("green up", &normal_option_greenup);
+
+                  if (apply_normal_map)
+                  {
+                      ImGui::Checkbox("Compute tangents on the fly", &normal_compute_on_fly);
+                      if (normal_compute_on_fly)
+                      {
+                          ImGui::Checkbox("unsigned", &normal_option_unsigned);
+                          ImGui::SameLine();
+                          ImGui::Checkbox("2 channels", &normal_option_2chan);
+                          ImGui::SameLine();
+                          ImGui::Checkbox("green up", &normal_option_greenup);
+                      }
+                  }
                   
               }
           }
@@ -1007,8 +742,7 @@ std::vector<GLuint> ViewerApplication::createBufferObjects(
 std::vector<GLuint>
 ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                                             const std::vector<GLuint> &bufferObjects,
-                                            std::vector<VaoRange> & meshIndexToVaoRange,
-                                            const std::unordered_map<uint32_t, GLuint> &tangents) const
+                                            std::vector<VaoRange> & meshIndexToVaoRange) const
 {
     std::vector<GLuint> vertexArrayObjects;
     for (auto const & mesh: model.meshes)
@@ -1034,6 +768,7 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                     {"POSITION", VERTEX_ATTRIB_POSITION_IDX},
                     {"NORMAL", VERTEX_ATTRIB_NORMAL_IDX},
                     {"TEXCOORD_0", VERTEX_ATTRIB_TEXCOORD0_IDX},
+                    {"TANGENT", VERTEX_ATTRIB_TANGENT_IDX},
                 };
 
             for (const auto name_and_attrib: attributes)
@@ -1066,24 +801,6 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
                                                                                                                                                                                                     
             }
 
-            auto tan_it = tangents.find(pIdx);
-            if (tan_it != tangents.end())
-            {
-                auto tan_vbo = tan_it->second;
-                
-                glEnableVertexAttribArray(VERTEX_ATTRIB_TANGENT_IDX);
-                
-                glBindBuffer(GL_ARRAY_BUFFER, tan_vbo);
-                glVertexAttribPointer(VERTEX_ATTRIB_TANGENT_IDX,
-                                      3,
-                                      GL_FLOAT,
-                                      GL_FALSE,
-                                      (GLsizei) 0,
-                                      (const GLvoid*) 0);
-                
-            }
-
-
             if (primitive.indices >= 0)
             {
                 const auto & accessor = model.accessors[primitive.indices];
@@ -1098,7 +815,6 @@ ViewerApplication::createVertexArrayObjects(const tinygltf::Model &model,
             glBindVertexArray(0);
 
             prim_off++;
-            pIdx++;
         }
     }
 
