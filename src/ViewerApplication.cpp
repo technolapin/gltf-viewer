@@ -262,6 +262,7 @@ int ViewerApplication::run()
   bool normal_option_greenup = false;
   bool normal_compute_on_fly = false;
   int render_mode = 0;
+  int fps = 200;
   
   
   const auto bind_texture = [&](const auto tex, const auto texture_slot, const auto location)
@@ -533,12 +534,12 @@ int ViewerApplication::run()
       return 0;
   }
 
-
+  
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
        ++iterationCount)
   {
-      Delayer _delayer(1000000/120);
+      Delayer _delayer(1000000/fps);
       const auto seconds = glfwGetTime();
 
       const auto camera = cameras[camera_index]->getCamera();
@@ -551,6 +552,7 @@ int ViewerApplication::run()
           ImGui::Begin("GUI");
           ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                       1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+          ImGui::SliderInt("FPS LIMITER", &fps, 10, 1000);
           if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
 
               const auto prev_camera_index = camera_index;
