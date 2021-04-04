@@ -1,5 +1,6 @@
 #+TITLE: Rapport de Projet
 #+SUBTITLE: Implémentation d'un visioneurs de fichiers gltf
+#+AUTHOR: Clément Chomicki
 
 * Généralités
 ** Limitation des FPS
@@ -35,9 +36,9 @@
 
    Un autre problème rencontré, et qui est toujours là (et qui n'est peut-être pas de mon dû), est une aberration au niveau de l'axe vertical pour certains triangles en mode précalculé, où la normale est déviée dans la direction opposée à ce qu'elle devraît être.
    Cela arrive notamment aux endroit réfléchis horizontalement, où l'axe z se retrouve d'un côté à l'endroit et de l'autre à l'envers.
-   [[ ./images_rapport/aberration.png]]
+   [[./images_rapport/aberration.png]]
 
    Ce problème est inexistant avec la méthode temps réel.
 
 
-[[./images_rapport/all_lion.png]]   
+   [[./images_rapport/all_lion.png]]   
