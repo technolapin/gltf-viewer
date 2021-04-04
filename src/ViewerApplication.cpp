@@ -76,6 +76,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
   const auto modelViewMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
+  const auto modelMatrixLocation =
+      glGetUniformLocation(glslProgram.glId(), "uModelMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
@@ -112,12 +114,15 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uNormalTexture");
   const auto useNormalLocation =
       glGetUniformLocation(glslProgram.glId(), "uUseNormal");
-
+  const auto renderModeLocation =
+      glGetUniformLocation(glslProgram.glId(), "uRenderMode");
 
 
   // bounding box
   glm::vec3 bboxMin, bboxMax, bboxCenter, bboxDiag;
+  std::cout << "MARCO\n";
   computeSceneBounds(model, bboxMin, bboxMax);
+  std::cout << "POLO\n";
   bboxCenter = (bboxMin + bboxMax)*0.5f;
   bboxDiag = bboxMax - bboxMin;
 
@@ -127,7 +132,7 @@ int ViewerApplication::run()
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
           0.001f * maxDistance, 1.5f * maxDistance);
 
-  const auto camera_speed_percentage = 0.04f;
+  const auto camera_speed_percentage = 0.1f;
   
   // DONE Implement a new CameraController model and use it instead. Propose the
   // choice from the GUI
@@ -235,7 +240,9 @@ int ViewerApplication::run()
   bool normal_option_unsigned = false;
   bool normal_option_2chan = false;
   bool normal_option_greenup = true;
-
+  int render_mode = 0;
+  
+  
   const auto bind_texture = [&](const auto tex, const auto texture_slot, const auto location)
   {
       glActiveTexture(GL_TEXTURE0 + texture_slot);
@@ -368,6 +375,8 @@ int ViewerApplication::run()
   {
       glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+      glUniform1i(renderModeLocation, render_mode);
       
       const auto viewMatrix = camera.getViewMatrix();
       
@@ -404,11 +413,14 @@ int ViewerApplication::run()
             const auto & node = model.nodes[nodeIdx];
             const auto modelMatrix = getLocalToWorldMatrix(node, parentMatrix); 
             if (node.mesh >= 0)
-            {
+            { 
                 const auto modelViewMatrix = viewMatrix * modelMatrix;
                 const auto modelViewProjMatrix = projMatrix * modelViewMatrix;
                 const auto normalMatrix = glm::transpose(glm::inverse(modelViewMatrix));
 
+                glUniformMatrix4fv(modelMatrixLocation,
+                                   1, GL_FALSE,
+                                   glm::value_ptr(modelMatrix));
                 glUniformMatrix4fv(modelViewMatrixLocation,
                                    1, GL_FALSE,
                                    glm::value_ptr(modelViewMatrix));
@@ -567,6 +579,21 @@ int ViewerApplication::run()
                   
               }
           }
+
+          if (ImGui::CollapsingHeader("Render Mode"))
+          {
+              ImGui::RadioButton("Full", &render_mode, 0);
+              ImGui::RadioButton("Show Normals", &render_mode, 1);
+              ImGui::RadioButton("Normal Map", &render_mode, 2);
+              ImGui::RadioButton("Pos Variation X", &render_mode, 3);
+              ImGui::RadioButton("Pos Variation Y", &render_mode, 4);
+              ImGui::RadioButton("UV variation X", &render_mode, 5);
+              ImGui::RadioButton("UV variation Y", &render_mode, 6);
+              ImGui::RadioButton("UV", &render_mode, 7);
+              ImGui::RadioButton("WorldSpace Position", &render_mode, 8);
+              ImGui::RadioButton("Viewspace Position", &render_mode, 9);
+          }
+
           ImGui::End();
       }
 
@@ -677,7 +704,6 @@ std::vector<GLuint> ViewerApplication::createBufferObjects(
     return bufferObjects;
 }
 
-#include <typeinfo>  
 
 
 
