@@ -598,14 +598,11 @@ int ViewerApplication::run()
                   if (apply_normal_map)
                   {
                       ImGui::Checkbox("Compute tangents on the fly", &normal_compute_on_fly);
-                      if (normal_compute_on_fly)
-                      {
-                          ImGui::Checkbox("unsigned", &normal_option_unsigned);
-                          ImGui::SameLine();
-                          ImGui::Checkbox("2 channels", &normal_option_2chan);
-                          ImGui::SameLine();
-                          ImGui::Checkbox("green up", &normal_option_greenup);
-                      }
+                      ImGui::Checkbox("unsigned", &normal_option_unsigned);
+                      ImGui::SameLine();
+                      ImGui::Checkbox("2 channels", &normal_option_2chan);
+                      ImGui::SameLine();
+                      ImGui::Checkbox("green up", &normal_option_greenup);
                   }
                   
               }
