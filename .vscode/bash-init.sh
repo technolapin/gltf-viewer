@@ -24,7 +24,7 @@ cmake_clean() {
 cmake_prepare() {
   # Note: $@ forwards argument so you can add additional arguments
   # e.g: cmake_prepare -DCMAKE_BUILD_TYPE=Release to configure the build solution in release mode with gcc
-  cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./dist $@
+  cmake -S . -B build $@
 }
 
 cmake_build() {
@@ -42,21 +42,21 @@ cmake_install() {
 view_sponza() {
   cmake_prepare
   cmake_install
-  dist/gltf-viewer viewer gltf-sample-models/2.0/Sponza/glTF/Sponza.gltf \
+  build/bin/gltf-viewer viewer gltf-sample-models/2.0/Sponza/glTF/Sponza.gltf \
     --lookat -5.26056,6.59932,0.85661,-4.40144,6.23486,0.497347,0.342113,0.931131,-0.126476
 }
 
 view_helmet() {
   cmake_prepare
   cmake_install
-  dist/gltf-viewer viewer gltf-sample-models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf
+  build/bin/gltf-viewer viewer gltf-sample-models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf
 }
 
 render_sponza() {
   cmake_prepare
   cmake_install
   [ ! -d output-images ] && mkdir output-images
-  dist/gltf-viewer viewer gltf-sample-models/2.0/Sponza/glTF/Sponza.gltf \
+  build/bin/gltf-viewer viewer gltf-sample-models/2.0/Sponza/glTF/Sponza.gltf \
     --lookat -5.26056,6.59932,0.85661,-4.40144,6.23486,0.497347,0.342113,0.931131,-0.126476 \
     --output output-images/sponza.png
 }
@@ -64,6 +64,7 @@ render_sponza() {
 render_helmet() {
   cmake_prepare
   cmake_install
-  dist/gltf-viewer viewer gltf-sample-models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf \
+  [ ! -d output-images ] && mkdir output-images
+  build/bin/gltf-viewer viewer gltf-sample-models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf \
     --output output-images/helmet.png
 }
