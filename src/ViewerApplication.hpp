@@ -73,7 +73,8 @@ private:
     std::vector<GLuint>
     createVertexArrayObjects(const tinygltf::Model &model,
                              const std::vector<GLuint> &bufferObjects,
-                             std::vector<VaoRange> & meshIndexToVaoRange) const;
+                             std::vector<VaoRange> & meshIndexToVaoRange,
+                             const std::unordered_map<uint32_t, GLuint> & tangents) const;
 
     std::vector<GLuint>
     createTextureObjects(const tinygltf::Model & model) const;

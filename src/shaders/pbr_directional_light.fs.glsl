@@ -4,6 +4,7 @@ in vec3 vViewSpaceNormal;
 in vec2 vTexCoords;
 in vec3 vViewSpacePosition;
 in vec3 vWorldSpacePosition;
+in mat3 vTBN;
 
 uniform vec3 uLightDir;
 uniform vec3 uLightCol;
@@ -155,7 +156,10 @@ void main()
 
   if (uUseNormal != 0)
   {
-      N = perturb_normal( N, -V, vTexCoords );
+      //N = perturb_normal( N, -V, vTexCoords );
+      N = texture(uNormalTexture, vTexCoords).rgb;
+      N = N * 2.0 - 1.0;
+      N = normalize(vTBN * N);
   }
   
   vec4 metallicFactors = texture(uMetallicRoughnessTexture, vTexCoords);
@@ -164,6 +168,7 @@ void main()
   float baseMetallic = metallicFactors.b;
   
   
+
   vec4 baseColorFromTexture = 
       SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords));
   vec4 baseColor = baseColorFromTexture * uBaseColorFactor;

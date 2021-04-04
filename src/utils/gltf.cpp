@@ -38,7 +38,6 @@ glm::mat4 getLocalToWorldMatrix(
 void computeSceneBounds(
     const tinygltf::Model &model, glm::vec3 &bboxMin, glm::vec3 &bboxMax)
 {
-    std::cout << "teteetaztzeata\n";
   // Compute scene bounding box
   // todo refactor with scene drawing
   // todo need a visitScene generic function that takes a accept() functor
@@ -105,8 +104,6 @@ void computeSceneBounds(
                       indexByteStride ? indexByteStride : sizeof(uint32_t);
                   break;
                 }
-
-                std::cout << "INDICES " << indexAccessor.count << "   " << indexAccessor.count % 3 <<  std::endl;
                 
                 for (size_t i = 0; i < indexAccessor.count; ++i) {
                   uint32_t index = 0;
@@ -133,7 +130,6 @@ void computeSceneBounds(
                   bboxMax = glm::max(bboxMax, worldPosition);
                 }
               } else {
-                  std::cout << "NO INDICES " << positionAccessor.count << "   " << positionAccessor.count % 3 << std::endl;
 
                 for (size_t i = 0; i < positionAccessor.count; ++i) {
                   const auto &localPosition =
@@ -158,171 +154,3 @@ void computeSceneBounds(
 }
 
 
-
-
-
-void computeTangents(
-    const tinygltf::Model &model, glm::vec3 &bboxMin, glm::vec3 &bboxMax)
-{
-    
-  if (model.defaultScene >= 0) {
-    const std::function<void(int, const glm::mat4 &)> updateBounds =
-        [&](int nodeIdx, const glm::mat4 &parentMatrix) {
-          const auto &node = model.nodes[nodeIdx];
-          const glm::mat4 modelMatrix =
-              getLocalToWorldMatrix(node, parentMatrix);
-          if (node.mesh >= 0) {
-            const auto &mesh = model.meshes[node.mesh];
-            for (size_t pIdx = 0; pIdx < mesh.primitives.size(); ++pIdx) {
-              const auto &primitive = mesh.primitives[pIdx];
-              const auto positionAttrIdxIt = primitive.attributes.find("POSITION");
-              const auto normalAttrIdxIt = primitive.attributes.find("NORMAL");
-              const auto texcoordAttrIdxIt = primitive.attributes.find("TEXCOORD_0");
-
-              // we ignore if we miss data
-              if (positionAttrIdxIt == end(primitive.attributes)
-                  || normalAttrIdxIt == end(primitive.attributes)
-                  || texcoordAttrIdxIt == end(primitive.attributes))
-              {
-                continue;
-              }
-              
-              const auto &positionAccessor = model.accessors[(*positionAttrIdxIt).second];
-              const auto &normalAccessor = model.accessors[(*normalAttrIdxIt).second];
-              const auto &texcoordAccessor = model.accessors[(*texcoordAttrIdxIt).second];
-              if (positionAccessor.type != 3) {
-                std::cerr << "Position accessor with type != VEC3, skipping"
-                          << std::endl;
-                continue;
-              }
-              if (normalAccessor.type != 3) {
-                std::cerr << "Normal accessor with type != VEC3, skipping"
-                          << std::endl;
-                continue;
-              }
-              if (texcoordAccessor.type != 2) {
-                std::cerr << "Position accessor with type != VEC2, skipping"
-                          << std::endl;
-                continue;
-              }
-              const auto &positionBufferView =
-                  model.bufferViews[positionAccessor.bufferView];
-              const auto positionByteOffset =
-                  positionAccessor.byteOffset + positionBufferView.byteOffset;
-              const auto &positionBuffer =
-                  model.buffers[positionBufferView.buffer];
-              const auto positionByteStride =
-                  positionBufferView.byteStride ? positionBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              const auto &normalBufferView =
-                  model.bufferViews[normalAccessor.bufferView];
-              const auto normalByteOffset =
-                  normalAccessor.byteOffset + normalBufferView.byteOffset;
-              const auto &normalBuffer =
-                  model.buffers[normalBufferView.buffer];
-              const auto normalByteStride =
-                  normalBufferView.byteStride ? normalBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              const auto &texcoordBufferView =
-                  model.bufferViews[texcoordAccessor.bufferView];
-              const auto texcoordByteOffset =
-                  texcoordAccessor.byteOffset + texcoordBufferView.byteOffset;
-              const auto &texcoordBuffer =
-                  model.buffers[texcoordBufferView.buffer];
-              const auto texcoordByteStride =
-                  texcoordBufferView.byteStride ? texcoordBufferView.byteStride
-                                                : 3 * sizeof(float);
-
-              std::vector<uint32_t> indexes = {};
-              
-              if (primitive.indices >= 0) {
-                const auto &indexAccessor = model.accessors[primitive.indices];
-                const auto &indexBufferView =
-                    model.bufferViews[indexAccessor.bufferView];
-                const auto indexByteOffset =
-                    indexAccessor.byteOffset + indexBufferView.byteOffset;
-                const auto &indexBuffer = model.buffers[indexBufferView.buffer];
-                auto indexByteStride = indexBufferView.byteStride;
-
-                switch (indexAccessor.componentType) {
-                default:
-                  std::cerr
-                      << "Primitive index accessor with bad componentType "
-                      << indexAccessor.componentType << ", skipping it."
-                      << std::endl;
-                  continue;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint8_t);
-                  break;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint16_t);
-                  break;
-                case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                  indexByteStride =
-                      indexByteStride ? indexByteStride : sizeof(uint32_t);
-                  break;
-                }
-
-                
-                for (size_t i = 0; i < indexAccessor.count; ++i) {
-                  uint32_t index = 0;
-                  switch (indexAccessor.componentType) {
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                    index = *((const uint8_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                    index = *((const uint16_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                    index = *((const uint32_t *)&indexBuffer
-                                  .data[indexByteOffset + indexByteStride * i]);
-                    break;
-                  }
-
-                  indexes.push_back(index);
-
-                  const auto &localPosition =
-                      *((const glm::vec3 *)&positionBuffer
-                              .data[positionByteOffset + positionByteStride * index]);
-                  const auto worldPosition =
-                      glm::vec3(modelMatrix * glm::vec4(localPosition, 1.f));
-                  bboxMin = glm::min(bboxMin, worldPosition);
-                  bboxMax = glm::max(bboxMax, worldPosition);
-                }
-              }
-              else
-              {
-                for (size_t i = 0; i < positionAccessor.count; ++i) {
-                  indexes.push_back(i);
-                  const auto &localPosition =
-                      *((const glm::vec3 *)&positionBuffer
-                              .data[positionByteOffset + positionByteStride * i]);
-                  const auto worldPosition =
-                      glm::vec3(modelMatrix * glm::vec4(localPosition, 1.f));
-                  bboxMin = glm::min(bboxMin, worldPosition);
-                  bboxMax = glm::max(bboxMax, worldPosition);
-                }
-              }
-
-              auto n = indexes.size();
-
-              //             for 
-              
-              
-            }
-          }
-          for (const auto childNodeIdx : node.children) {
-            updateBounds(childNodeIdx, modelMatrix);
-          }
-        };
-    for (const auto nodeIdx : model.scenes[model.defaultScene].nodes) {
-      updateBounds(nodeIdx, glm::mat4(1));
-    }
-  }
-}

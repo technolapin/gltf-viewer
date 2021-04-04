@@ -8,3 +8,6 @@ glm::mat4 getLocalToWorldMatrix(
 
 void computeSceneBounds(
     const tinygltf::Model &model, glm::vec3 &bboxMin, glm::vec3 &bboxMax);
+
+//void computeTangents(const tinygltf::Model &model);
+
