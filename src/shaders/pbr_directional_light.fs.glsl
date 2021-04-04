@@ -143,8 +143,17 @@ vec3 perturb_normal( vec3 N, vec3 V, vec2 texcoord )
     {
         map.y = -map.y;
     }
-    mat3 TBN = cotangent_frame( N, -V, texcoord );
-    return normalize( TBN * map );
+
+    if ((uUseNormal & WITH_ON_FLY) != 0)
+    {
+        mat3 TBN = cotangent_frame( N, V, texcoord );
+        return normalize( TBN * map );
+    }
+    else
+    {
+        return normalize( vTBN * map );
+    }
+    
 }
 
 
@@ -157,16 +166,7 @@ void main()
 
   if (uUseNormal != 0)
   {
-      if ((uUseNormal & WITH_ON_FLY) != 0)
-      {
-          N = perturb_normal( N, -V, vTexCoords );
-      }
-      else
-      {
-          N = texture(uNormalTexture, vTexCoords).rgb;
-          N = N * 2.0 - 1.0;
-          N = normalize(vTBN * N);
-      }
+      N = perturb_normal( N, -V, vTexCoords );
   }
   
   vec4 metallicFactors = texture(uMetallicRoughnessTexture, vTexCoords);
